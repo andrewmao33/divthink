@@ -1,0 +1,45 @@
+/* Global styles and design tokens. Component styles live next to each
+   component in *.module.css files (CSS Modules: class names are scoped). */
+
+:root {
+  /* Colors: neutrals plus one accent (design.md, "Visual direction").
+     Placeholder values, tune freely. */
+  --color-bg: #fafafa;
+  --color-surface: #ffffff;
+  --color-border: #e5e5e5;
+  --color-text: #171717;
+  --color-text-muted: #a3a3a3;
+  --color-accent: #4f46e5;
+  --color-edge: #d4d4d4;
+  --color-error: #b91c1c;
+
+  /* Type */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+
+  --radius: 8px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+}

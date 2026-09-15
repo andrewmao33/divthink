@@ -1,0 +1,163 @@
+/* Fixed at the bottom center, above the canvas. */
+.chat {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  z-index: 10;
+  width: min(720px, calc(100% - 32px));
+  transform: translateX(-50%);
+}
+
+.box {
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 6%);
+}
+
+.box:focus-within {
+  border-color: var(--color-accent);
+}
+
+.row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+.input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.send {
+  flex: none;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--color-accent);
+  font: inherit;
+  font-size: var(--text-sm);
+  color: #fff;
+  cursor: pointer;
+}
+
+.send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* "Replying to 1 box ×", above the box. */
+.context {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  margin: 0 0 6px 6px;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.blocked {
+  color: var(--color-error);
+}
+
+.clear {
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--text-base);
+  line-height: 1;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.clear:hover {
+  color: var(--color-text);
+}
+
+.danger,
+.textButton {
+  margin-left: 6px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 6px;
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.danger {
+  background: var(--color-error);
+  color: #fff;
+}
+
+.textButton {
+  background: none;
+  color: var(--color-text-muted);
+}
+
+.textButton:hover {
+  color: var(--color-text);
+}
+
+/* Model picker, next to Send. */
+.model {
+  flex: none;
+  max-width: 160px;
+  padding: 5px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+/* The highlighted quote, inside the box above the input. */
+.quote {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 2px 0 6px;
+  padding: 6px 8px 6px 10px;
+  border-left: 3px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+}
+
+.quoteText {
+  display: -webkit-box;
+  flex: 1;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  font-style: italic;
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.error {
+  margin: 0 0 6px;
+  font-size: var(--text-sm);
+  text-align: center;
+  color: var(--color-error);
+}

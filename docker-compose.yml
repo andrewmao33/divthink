@@ -1,0 +1,32 @@
+# Local dev database. Production uses Supabase.
+#
+#   docker compose up -d       start
+#   docker compose down        stop (data kept)
+#   docker compose down -v     stop and delete all data
+#
+# On first start (empty volume), Postgres runs schema.sql then seed.sql.
+# After changing schema.sql, reset with `down -v` then `up -d`.
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: divthink
+      POSTGRES_PASSWORD: divthink
+      POSTGRES_DB: divthink
+    ports:
+      # Host port 5433 (avoids clashing with a local Postgres on 5432), bound to
+      # 127.0.0.1 so the dev database isn't reachable from other machines.
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./backend/db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U divthink -d divthink"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  pgdata:

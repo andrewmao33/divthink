@@ -1,0 +1,54 @@
+/* Fills the page. The --xy-* variables are how React Flow picks colors;
+   they inherit down into the flow, so we point them at our tokens. */
+.canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--color-bg);
+  --xy-background-color: var(--color-bg);
+  --xy-edge-stroke: var(--color-edge);
+}
+
+/* Drag trail fixes (Chrome left faint streaks where a box had been):
+   - base.css removes the browser focus ring only for React Flow's built-in node
+     types, not custom ones, and a focus ring on a moving element can leave trails.
+     Selection is shown by the box's own border instead.
+   - Each box gets its own compositing layer, so moving it repaints cleanly. */
+.canvas :global(.react-flow__node):focus,
+.canvas :global(.react-flow__node):focus-visible {
+  outline: none;
+}
+
+.canvas :global(.react-flow__node) {
+  will-change: transform;
+}
+
+/* Shown at the top while live updates are reconnecting. */
+.connection {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 10;
+  margin: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* "Loading…" or an error, centered. */
+.notice {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  pointer-events: none; /* never block panning the canvas */
+}

@@ -1,0 +1,92 @@
+.box {
+  width: 360px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+/* Prompts sit slightly back from replies. */
+.user {
+  background: var(--color-bg);
+}
+
+/* A highlighted quote from a reply. */
+.highlight {
+  border-left: 3px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.selected {
+  border-color: var(--color-accent);
+}
+
+.text,
+.muted,
+.errorTitle,
+.errorReason {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.muted,
+.errorReason {
+  color: var(--color-text-muted);
+}
+
+.errorTitle {
+  font-weight: 500;
+  color: var(--color-error);
+}
+
+.errorReason {
+  margin-top: 2px;
+  font-size: 0.9em;
+}
+
+/* Reply text can be selected (React Flow turns selection off for boxes). */
+.reply {
+  cursor: text;
+  user-select: text;
+}
+
+/* While thinking: heading on the left, timer on the right. */
+.thinking {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.timer {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* After thinking: "Thought for Ns", optionally expandable. */
+.thought {
+  margin: 0 0 8px;
+  font-size: 0.9em;
+  color: var(--color-text-muted);
+}
+
+.thought summary {
+  width: fit-content;
+  cursor: pointer;
+}
+
+.thought ul {
+  margin: 4px 0 0;
+  padding-left: 1.2em;
+}
+
+.handle {
+  opacity: 0;
+  pointer-events: none;
+}
