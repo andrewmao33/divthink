@@ -16,8 +16,8 @@ log = logging.getLogger(__name__)
 
 MAX_CONCURRENT = 5  # design.md, "Concurrency"
 
-# Provider name (from providers/catalog.py) -> its stream function.
-PROVIDERS: dict[str, Callable[[str, list[Message]], AsyncIterator[Chunk]]] = {
+# Provider name (from providers/catalog.py) -> its stream function (model, messages, api_key).
+PROVIDERS: dict[str, Callable[[str, list[Message], str], AsyncIterator[Chunk]]] = {
     "google": gemini.stream,
     "anthropic": claude.stream,
 }
@@ -27,17 +27,17 @@ _tasks: set[asyncio.Task] = set()  # keeps running jobs from being garbage-colle
 
 
 def start_generation(
-    session_id: UUID, user_node_id: UUID, assistant_node_id: UUID, model: str
+    session_id: UUID, user_node_id: UUID, assistant_node_id: UUID, model: str, api_key: str
 ) -> asyncio.Task:
-    """Fill in `assistant_node_id` in the background. Returns immediately."""
-    task = asyncio.create_task(_generate(session_id, user_node_id, assistant_node_id, model))
+    """Fill in `assistant_node_id` in the background with the user's key. Returns immediately."""
+    task = asyncio.create_task(_generate(session_id, user_node_id, assistant_node_id, model, api_key))
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
     return task
 
 
 async def _generate(
-    session_id: UUID, user_node_id: UUID, assistant_node_id: UUID, model: str
+    session_id: UUID, user_node_id: UUID, assistant_node_id: UUID, model: str, api_key: str
 ) -> None:
     node = str(assistant_node_id)
     async with _slots:  # wait for one of the MAX_CONCURRENT slots
@@ -56,7 +56,7 @@ async def _generate(
             headings_sent = 0
             started = time.monotonic()
             thinking_seconds = None  # request start -> first answer text, if it thought
-            async for chunk in stream(model, messages):
+            async for chunk in stream(model, messages, api_key):
                 if chunk.kind == "thought":
                     if not thoughts:
                         events.reply_thinking(session_id, node)

@@ -9,6 +9,7 @@ import styles from './Canvas.module.css'
 import CanvasMenu from './CanvasMenu'
 import ChatBox from './ChatBox'
 import { isEditing } from './dom'
+import KeysDialog from './KeysDialog'
 import ReplyMenu from './ReplyMenu'
 import { useCanvasStore } from './store'
 
@@ -94,6 +95,7 @@ function Canvas() {
       <div className={styles.canvas}>
         <CanvasMenu />
         <p className={styles.notice}>{status === 'error' ? error : 'Loading…'}</p>
+        <KeysDialog />
       </div>
     )
   }
@@ -138,6 +140,7 @@ function Canvas() {
         />
       )}
       <ChatBox />
+      <KeysDialog />
     </div>
   )
 }

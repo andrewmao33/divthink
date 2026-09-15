@@ -3,18 +3,7 @@ from collections.abc import AsyncIterator
 from google import genai
 from google.genai import errors, types
 
-from ..config import settings
 from .base import Chunk, Message, ProviderError
-
-_client: genai.Client | None = None
-
-
-def _get_client() -> genai.Client:
-    # Created once and reused, instead of reconnecting for every message.
-    global _client
-    if _client is None:
-        _client = genai.Client(api_key=settings.google_api_key)
-    return _client
 
 
 def _to_gemini(messages: list[Message]) -> list[types.Content]:
@@ -28,10 +17,14 @@ def _to_gemini(messages: list[Message]) -> list[types.Content]:
     ]
 
 
-async def stream(model: str, messages: list[Message]) -> AsyncIterator[Chunk]:
-    """Yield the reply piece by piece: thinking summaries first, then the answer."""
+async def stream(model: str, messages: list[Message], api_key: str) -> AsyncIterator[Chunk]:
+    """Yield the reply piece by piece: thinking summaries first, then the answer.
+
+    A client per reply, closed afterwards, so the user's key isn't kept around.
+    """
+    client = genai.Client(api_key=api_key)
     try:
-        chunks = await _get_client().aio.models.generate_content_stream(
+        chunks = await client.aio.models.generate_content_stream(
             model=model,
             contents=_to_gemini(messages),
             config=types.GenerateContentConfig(
@@ -52,6 +45,10 @@ async def stream(model: str, messages: list[Message]) -> AsyncIterator[Chunk]:
                         yield Chunk("thought" if part.thought else "text", part.text)
     except errors.APIError as e:
         raise ProviderError(_friendly_error(e)) from e
+    finally:
+        aclose = getattr(client.aio, "aclose", None)
+        if aclose is not None:
+            await aclose()
 
 
 def _friendly_error(e: errors.APIError) -> str:
@@ -60,7 +57,7 @@ def _friendly_error(e: errors.APIError) -> str:
     if e.code in (500, 502, 503, 504):
         return "Gemini is busy or unavailable right now. Try again."
     if e.code in (401, 403) or "API key" in str(e.message or ""):
-        return "Gemini rejected the API key. Check GOOGLE_API_KEY in backend/.env."
+        return "Google rejected your API key. Update it in the menu → API keys."
     if e.code == 404:
-        return "This Gemini model isn't available."
+        return "This Gemini model isn't available on your account."
     return f"Gemini returned an error ({e.code})."

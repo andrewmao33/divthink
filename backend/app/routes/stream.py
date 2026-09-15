@@ -3,11 +3,11 @@ import json
 import time
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from .. import events
-from ..config import DEV_USER_ID
+from ..auth import current_user
 from ..db import get_pool
 
 router = APIRouter(prefix="/sessions", tags=["stream"])
@@ -17,10 +17,10 @@ KEEPALIVE_SECONDS = 15.0  # send a comment line if nothing else was sent for thi
 
 
 @router.get("/{session_id}/stream")
-async def stream(session_id: UUID, request: Request):
+async def stream(session_id: UUID, request: Request, user_id: UUID = Depends(current_user)):
     """Server-sent events for one canvas: node_created, thought, token, done, error."""
     exists = await get_pool().fetchval(
-        "SELECT 1 FROM sessions WHERE id = $1 AND user_id = $2", session_id, DEV_USER_ID
+        "SELECT 1 FROM sessions WHERE id = $1 AND user_id = $2", session_id, user_id
     )
     if not exists:
         raise HTTPException(status_code=404, detail="Session not found")

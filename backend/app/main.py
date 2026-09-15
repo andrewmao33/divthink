@@ -2,10 +2,12 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from . import db
-from .routes import generate, models, nodes, sessions, stream
+from .config import settings
+from .routes import generate, keys, models, nodes, sessions, stream
 
 log = logging.getLogger(__name__)
 
@@ -38,8 +40,26 @@ async def mark_interrupted_replies() -> int:
     return count
 
 
-app = FastAPI(title="divthink", lifespan=lifespan)
+app = FastAPI(
+    title="divthink",
+    lifespan=lifespan,
+    # The interactive /docs page is for local development only.
+    docs_url=None if settings.is_production else "/docs",
+    redoc_url=None,
+    openapi_url=None if settings.is_production else "/openapi.json",
+)
+
+# The site (e.g. divthink.com) calls the API on another origin (api.divthink.com).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+    max_age=600,
+)
+
 app.include_router(sessions.router)
+app.include_router(keys.router)
 app.include_router(generate.router)
 app.include_router(stream.router)
 app.include_router(nodes.router)

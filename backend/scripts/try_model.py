@@ -9,6 +9,7 @@ import asyncio
 import sys
 import time
 
+from app.config import settings
 from app.providers import gemini
 from app.providers.base import Message
 from app.thinking import thought_headings
@@ -35,7 +36,7 @@ async def main() -> None:
     shown = 0  # how many headings have been printed so far
     answer_started = False
 
-    async for chunk in gemini.stream(MODEL, messages):
+    async for chunk in gemini.stream(MODEL, messages, settings.google_api_key):
         now = time.perf_counter() - start
         if chunk.kind == "thought":
             thoughts += chunk.text

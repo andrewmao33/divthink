@@ -2,11 +2,11 @@ from collections import defaultdict
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from .. import events
-from ..config import DEV_USER_ID
+from ..auth import current_user
 from ..db import get_pool
 
 router = APIRouter(prefix="/sessions", tags=["nodes"])
@@ -32,7 +32,7 @@ class SavePositionsRequest(BaseModel):
 
 
 @router.post("/{session_id}/nodes/delete", response_model=DeleteNodesResponse)
-async def delete_nodes(session_id: UUID, body: DeleteNodesRequest):
+async def delete_nodes(session_id: UUID, body: DeleteNodesRequest, user_id: UUID = Depends(current_user)):
     """Delete nodes plus every descendant left with no parents (design.md, "Graph").
 
     A node that still has another parent survives, e.g. a merge keeps its other
@@ -40,7 +40,7 @@ async def delete_nodes(session_id: UUID, body: DeleteNodesRequest):
     """
     async with get_pool().acquire() as conn:
         async with conn.transaction():
-            await _lock_session(conn, session_id)
+            await _lock_session(conn, session_id, user_id)
             rows = await conn.fetch(
                 "SELECT id, status FROM nodes WHERE session_id = $1 ORDER BY created_at", session_id
             )
@@ -71,11 +71,11 @@ async def delete_nodes(session_id: UUID, body: DeleteNodesRequest):
 
 
 @router.patch("/{session_id}/positions", status_code=204)
-async def save_positions(session_id: UUID, body: SavePositionsRequest):
+async def save_positions(session_id: UUID, body: SavePositionsRequest, user_id: UUID = Depends(current_user)):
     """Save where boxes were dragged. Ids no longer on the canvas are ignored."""
     async with get_pool().acquire() as conn:
         exists = await conn.fetchval(
-            "SELECT 1 FROM sessions WHERE id = $1 AND user_id = $2", session_id, DEV_USER_ID
+            "SELECT 1 FROM sessions WHERE id = $1 AND user_id = $2", session_id, user_id
         )
         if not exists:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -86,11 +86,11 @@ async def save_positions(session_id: UUID, body: SavePositionsRequest):
     return Response(status_code=204)
 
 
-async def _lock_session(conn: asyncpg.Connection, session_id: UUID) -> None:
+async def _lock_session(conn: asyncpg.Connection, session_id: UUID, user_id: UUID) -> None:
     # Takes turns with /generate on the same canvas, so a delete can't race a new
     # prompt being attached to a node it removes.
     found = await conn.fetchval(
-        "SELECT 1 FROM sessions WHERE id = $1 AND user_id = $2 FOR UPDATE", session_id, DEV_USER_ID
+        "SELECT 1 FROM sessions WHERE id = $1 AND user_id = $2 FOR UPDATE", session_id, user_id
     )
     if not found:
         raise HTTPException(status_code=404, detail="Session not found")

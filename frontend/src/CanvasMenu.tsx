@@ -1,13 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { listSessions, type Session } from './api'
+import { authEnabled, signOut } from './auth'
 import styles from './CanvasMenu.module.css'
-import { useCanvasStore } from './store'
+import { resetCanvas, useCanvasStore } from './store'
 
 // Top-left: the open canvas's title; click for your canvases and "New canvas".
 function CanvasMenu() {
-  const { session, loadSession, newSession } = useCanvasStore(
-    useShallow((s) => ({ session: s.session, loadSession: s.loadSession, newSession: s.newSession })),
+  const { session, loadSession, newSession, openKeys } = useCanvasStore(
+    useShallow((s) => ({
+      session: s.session,
+      loadSession: s.loadSession,
+      newSession: s.newSession,
+      openKeys: s.openKeys,
+    })),
   )
   const [open, setOpen] = useState(false)
   const [sessions, setSessions] = useState<Session[] | null>(null)
@@ -100,6 +106,32 @@ function CanvasMenu() {
                 </li>
               ))}
             </ul>
+          )}
+          <div className={styles.divider} />
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.item}
+            onClick={() => {
+              setOpen(false)
+              openKeys()
+            }}
+          >
+            API keys
+          </button>
+          {authEnabled && (
+            <button
+              type="button"
+              role="menuitem"
+              className={styles.item}
+              onClick={() => {
+                setOpen(false)
+                resetCanvas()
+                void signOut()
+              }}
+            >
+              Sign out
+            </button>
           )}
         </div>
       )}

@@ -2,26 +2,20 @@ from collections.abc import AsyncIterator
 
 import anthropic
 
-from ..config import settings
 from .base import Chunk, Message, ProviderError
 
 MAX_TOKENS = 16000
 
-_client: anthropic.AsyncAnthropic | None = None
 
+async def stream(model: str, messages: list[Message], api_key: str) -> AsyncIterator[Chunk]:
+    """Yield the reply piece by piece: thinking summaries first, then the answer.
 
-def _get_client() -> anthropic.AsyncAnthropic:
-    # Created once and reused. The SDK retries 429/5xx and connection errors itself.
-    global _client
-    if _client is None:
-        _client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    return _client
-
-
-async def stream(model: str, messages: list[Message]) -> AsyncIterator[Chunk]:
-    """Yield the reply piece by piece: thinking summaries first, then the answer."""
+    A client per reply, closed afterwards, so the user's key isn't kept around.
+    The SDK retries 429/5xx and connection errors itself.
+    """
+    client = anthropic.AsyncAnthropic(api_key=api_key)
     try:
-        async with _get_client().messages.stream(
+        async with client.messages.stream(
             model=model,
             max_tokens=MAX_TOKENS,
             # Adaptive: Claude decides whether to think. "summarized" returns readable
@@ -41,6 +35,8 @@ async def stream(model: str, messages: list[Message]) -> AsyncIterator[Chunk]:
         raise ProviderError(_friendly_error(e)) from e
     except anthropic.APIConnectionError as e:
         raise ProviderError("Couldn't reach Claude. Check your connection and try again.") from e
+    finally:
+        await client.close()
 
     if final.stop_reason == "refusal":
         raise ProviderError("Claude declined to answer this request.")
@@ -50,11 +46,11 @@ def _friendly_error(e: anthropic.APIStatusError) -> str:
     if isinstance(e, anthropic.RateLimitError):
         return "Claude's rate limit was reached. Wait a minute and try again."
     if isinstance(e, anthropic.AuthenticationError):
-        return "Claude rejected the API key. Check ANTHROPIC_API_KEY in backend/.env."
+        return "Anthropic rejected your API key. Update it in the menu → API keys."
     if e.status_code == 402:
         return "Your Anthropic account is out of credits. Add credits in the Claude Console."
     if isinstance(e, anthropic.NotFoundError):
-        return "This Claude model isn't available."
+        return "This Claude model isn't available on your account."
     if e.status_code >= 500:
         return "Claude is busy or unavailable right now. Try again."
     return f"Claude returned an error ({e.status_code})."

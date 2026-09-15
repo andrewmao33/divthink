@@ -24,6 +24,7 @@ function ChatBox() {
     confirmDelete,
     cancelDelete,
     setModel,
+    openKeys,
   } = useCanvasStore(
     useShallow((s) => ({
       highlight: s.highlight,
@@ -38,11 +39,14 @@ function ChatBox() {
       confirmDelete: s.confirmDelete,
       cancelDelete: s.cancelDelete,
       setModel: s.setModel,
+      openKeys: s.openKeys,
     })),
   )
   const [text, setText] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const context = describeSelection(selected, highlight !== null)
+  // Signed in but no API key saved yet: nothing can be sent.
+  const needsKey = models.length > 0 && !models.some((m) => m.available)
 
   // Grow with the text, up to MAX_INPUT_HEIGHT.
   useLayoutEffect(() => {
@@ -69,7 +73,7 @@ function ChatBox() {
 
   async function submit() {
     const prompt = text.trim()
-    if (!prompt || sending || context.blocked) return
+    if (!prompt || sending || context.blocked || needsKey) return
     // Keep the text if sending fails, so nothing typed is lost.
     if (await sendPrompt(prompt)) setText('')
   }
@@ -97,7 +101,14 @@ function ChatBox() {
     >
       {notice && <p className={styles.error}>{notice}</p>}
 
-      {pendingDelete ? (
+      {needsKey && !pendingDelete ? (
+        <div className={styles.context}>
+          <span className={styles.blocked}>Add your API key to start.</span>
+          <button type="button" className={styles.textButton} onClick={openKeys}>
+            Add key
+          </button>
+        </div>
+      ) : pendingDelete ? (
         <div className={styles.context}>
           <span className={styles.blocked}>
             Delete {pendingDelete.count} boxes, including everything below?
@@ -160,7 +171,7 @@ function ChatBox() {
           <button
             type="submit"
             className={styles.send}
-            disabled={sending || !text.trim() || context.blocked !== null}
+            disabled={sending || !text.trim() || context.blocked !== null || needsKey}
           >
             {sending ? 'Sending…' : 'Send'}
           </button>

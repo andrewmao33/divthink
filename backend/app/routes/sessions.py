@@ -1,10 +1,10 @@
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
-from ..config import DEV_USER_ID
+from ..auth import current_user
 from ..db import get_pool
 from ..schemas import Edge, Node
 
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 class SessionCreate(BaseModel):
-    title: str = ""
+    title: str = Field(default="", max_length=200)
     default_model: str | None = None
 
 
@@ -30,20 +30,20 @@ class SessionGraph(Session):
 
 
 @router.post("", response_model=Session, status_code=201)
-async def create_session(body: SessionCreate):
+async def create_session(body: SessionCreate, user_id: UUID = Depends(current_user)):
     row = await get_pool().fetchrow(
         """
         INSERT INTO sessions (user_id, title, default_model)
         VALUES ($1, $2, $3)
         RETURNING id, title, default_model, created_at, updated_at
         """,
-        DEV_USER_ID, body.title, body.default_model,
+        user_id, body.title, body.default_model,
     )
     return dict(row)
 
 
 @router.get("", response_model=list[Session])
-async def list_sessions():
+async def list_sessions(user_id: UUID = Depends(current_user)):
     rows = await get_pool().fetch(
         """
         SELECT id, title, default_model, created_at, updated_at
@@ -51,13 +51,13 @@ async def list_sessions():
         WHERE user_id = $1
         ORDER BY updated_at DESC
         """,
-        DEV_USER_ID,
+        user_id,
     )
     return [dict(r) for r in rows]
 
 
 @router.get("/{session_id}", response_model=SessionGraph)
-async def get_session(session_id: UUID):
+async def get_session(session_id: UUID, user_id: UUID = Depends(current_user)):
     pool = get_pool()
     session = await pool.fetchrow(
         """
@@ -65,7 +65,7 @@ async def get_session(session_id: UUID):
         FROM sessions
         WHERE id = $1 AND user_id = $2
         """,
-        session_id, DEV_USER_ID,
+        session_id, user_id,
     )
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")

@@ -1,5 +1,18 @@
-// Talks to the backend through the /api dev proxy (see vite.config.ts).
+// Talks to the backend. Locally that's the /api dev proxy (vite.config.ts); in
+// production VITE_API_URL points at the API (e.g. https://api.divthink.com).
 // Types mirror the backend's response shapes (backend/app/schemas.py).
+import { accessToken } from './auth'
+
+const API_URL = (import.meta.env.VITE_API_URL as string | undefined) || '/api'
+
+export function apiUrl(path: string): string {
+  return `${API_URL.replace(/\/$/, '')}${path}`
+}
+
+export async function authHeaders(): Promise<Record<string, string>> {
+  const token = await accessToken()
+  return token ? { authorization: `Bearer ${token}` } : {}
+}
 
 export type NodeType = 'user' | 'assistant' | 'highlight'
 export type NodeStatus = 'pending' | 'streaming' | 'complete' | 'error'
@@ -47,9 +60,9 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response
   try {
-    res = await fetch(`/api${path}`, {
+    res = await fetch(apiUrl(path), {
       ...init,
-      headers: { 'content-type': 'application/json', ...init?.headers },
+      headers: { 'content-type': 'application/json', ...(await authHeaders()), ...init?.headers },
     })
   } catch {
     throw new ApiError(0, "Can't reach the server.")
@@ -128,9 +141,32 @@ export type ModelInfo = {
   id: string
   label: string
   provider: string
-  available: boolean // its provider's API key is set on the server
+  available: boolean // the user has an API key for its provider
 }
 
 export function listModels(): Promise<{ models: ModelInfo[]; default: string }> {
   return request('/models')
+}
+
+export type KeyStatus = {
+  provider: string
+  label: string
+  configured: boolean
+}
+
+// Which providers have a saved key. The keys themselves never come back.
+export function listKeys(): Promise<KeyStatus[]> {
+  return request('/keys')
+}
+
+// The server checks the key with the provider before saving it (encrypted).
+export function saveKey(provider: string, key: string): Promise<void> {
+  return request(`/keys/${encodeURIComponent(provider)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ key }),
+  })
+}
+
+export function deleteKey(provider: string): Promise<void> {
+  return request(`/keys/${encodeURIComponent(provider)}`, { method: 'DELETE' })
 }

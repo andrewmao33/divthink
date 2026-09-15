@@ -40,6 +40,9 @@ type CanvasState = {
   pendingDelete: PendingDelete | null
   // Boxes the view should move to, set after sending a prompt.
   focusNodeIds: string[] | null
+  keysOpen: boolean // the API keys dialog
+  openKeys: () => void
+  closeKeys: () => void
   loadSession: (id: string | null) => Promise<void>
   newSession: () => Promise<void>
   loadModels: () => Promise<void>
@@ -72,6 +75,10 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   notice: null,
   pendingDelete: null,
   focusNodeIds: null,
+  keysOpen: false,
+
+  openKeys: () => set({ keysOpen: true }),
+  closeKeys: () => set({ keysOpen: false }),
 
   loadSession: async (id) => {
     // React StrictMode runs effects twice in development; load only once.
@@ -107,9 +114,15 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   loadModels: async () => {
     try {
       const { models, default: fallback } = await listModels()
+      const usable = (id: string | null) => models.some((m) => m.id === id && m.available)
       const saved = readSavedModel()
-      const usable = models.some((m) => m.id === saved && m.available)
-      set({ models, model: usable ? saved : fallback })
+      // Last choice if its key is set, else the default, else anything with a key.
+      const model = usable(saved)
+        ? saved
+        : usable(fallback)
+          ? fallback
+          : (models.find((m) => m.available)?.id ?? fallback)
+      set({ models, model })
     } catch {
       // No picker then; the server's default model is used.
     }
@@ -227,6 +240,29 @@ function withoutNodes(s: CanvasState, nodeIds: string[]) {
 let stream: AbortController | null = null
 let activeSessionId: string | null = null
 const MAX_RECONNECT_DELAY_MS = 10_000
+
+// Signing out: stop live updates and forget everything from the previous account.
+export function resetCanvas() {
+  stream?.abort()
+  stream = null
+  activeSessionId = null
+  useCanvasStore.setState({
+    status: 'idle',
+    error: null,
+    session: null,
+    nodes: [],
+    edges: [],
+    connection: 'live',
+    highlight: null,
+    models: [],
+    model: null,
+    sending: false,
+    notice: null,
+    pendingDelete: null,
+    focusNodeIds: null,
+    keysOpen: false,
+  })
+}
 
 function apply(event: StreamEvent) {
   useCanvasStore.setState((s) =>

@@ -2,14 +2,15 @@ import logging
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, field_validator
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field, field_validator
 
 from .. import events
-from ..config import DEV_USER_ID
+from ..auth import current_user
 from ..db import get_pool
 from ..generation import start_generation
-from ..providers.catalog import DEFAULT_MODEL, MODELS, provider_configured
+from ..keys import api_key_for
+from ..providers.catalog import DEFAULT_MODEL, LABELS, MODELS, PROVIDER_LABELS
 from ..schemas import NODE_COLUMNS, Edge, Node
 
 router = APIRouter(prefix="/sessions", tags=["generate"])
@@ -21,6 +22,7 @@ BELOW_PROMPT = 160  # prompt -> its reply
 SIBLING_GAP_X = 420  # each existing child of the same parent shifts the new one right
 NEW_TREE_GAP_X = 800  # a new tree starts this far right of the rightmost node
 TITLE_MAX = 60
+MAX_TEXT_CHARS = 50_000  # prompts and quotes
 
 
 def _not_blank(value: str) -> str:
@@ -31,14 +33,14 @@ def _not_blank(value: str) -> str:
 
 class Highlight(BaseModel):
     source_node_id: UUID
-    text: str
+    text: str = Field(max_length=MAX_TEXT_CHARS)
 
     _check_text = field_validator("text")(_not_blank)
 
 
 class GenerateRequest(BaseModel):
-    parent_ids: list[UUID] = []
-    prompt: str
+    parent_ids: list[UUID] = Field(default=[], max_length=50)
+    prompt: str = Field(max_length=MAX_TEXT_CHARS)
     model: str = DEFAULT_MODEL
     highlight: Highlight | None = None
 
@@ -57,12 +59,18 @@ Placed = tuple[UUID, float, float]
 
 
 @router.post("/{session_id}/generate", response_model=GenerateResponse, status_code=201)
-async def generate(session_id: UUID, body: GenerateRequest):
+async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depends(current_user)):
     """Save the prompt and an empty reply node. The AI fills the reply in later."""
     if body.model not in MODELS:
         raise HTTPException(status_code=422, detail=f"Unsupported model: {body.model}")
-    if not provider_configured(MODELS[body.model]):
-        raise HTTPException(status_code=422, detail=f"No API key is set for {body.model}.")
+    provider = MODELS[body.model]
+    # The user's own key, decrypted for this reply only.
+    api_key = await api_key_for(user_id, provider)
+    if not api_key:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Add your {PROVIDER_LABELS[provider]} API key to use {LABELS[body.model]} (menu → API keys).",
+        )
 
     parent_ids = list(dict.fromkeys(body.parent_ids))  # drop duplicates, keep order
     source_id = body.highlight.source_node_id if body.highlight else None
@@ -74,7 +82,7 @@ async def generate(session_id: UUID, body: GenerateRequest):
             # take turns, so they don't compute the same positions.
             session = await conn.fetchrow(
                 "SELECT title FROM sessions WHERE id = $1 AND user_id = $2 FOR UPDATE",
-                session_id, DEV_USER_ID,
+                session_id, user_id,
             )
             if session is None:
                 raise HTTPException(status_code=404, detail="Session not found")
@@ -112,13 +120,13 @@ async def generate(session_id: UUID, body: GenerateRequest):
                 parents = [(highlight_id, hx, hy)] + [p for p in parents if p[0] != source_id]
 
             ux, uy = await _prompt_position(conn, session_id, parents)
-            user_id = await _insert_node(conn, session_id, "user", body.prompt, "complete", ux, uy)
+            user_node_id = await _insert_node(conn, session_id, "user", body.prompt, "complete", ux, uy)
             assistant_id = await _insert_node(
                 conn, session_id, "assistant", "", "pending", ux, uy + BELOW_PROMPT,
                 model=body.model,
             )
             await _insert_edges(
-                conn, session_id, [(p[0], user_id) for p in parents] + [(user_id, assistant_id)]
+                conn, session_id, [(p[0], user_node_id) for p in parents] + [(user_node_id, assistant_id)]
             )
 
             session_title = await conn.fetchval(
@@ -134,11 +142,11 @@ async def generate(session_id: UUID, body: GenerateRequest):
 
     # Only after the transaction has committed, so listeners and the job can see
     # the new nodes. Announce first so tabs draw the boxes before any tokens arrive.
-    await _announce_new_nodes(session_id, [i for i in (highlight_id, user_id, assistant_id) if i])
-    start_generation(session_id, user_id, assistant_id, body.model)
+    await _announce_new_nodes(session_id, [i for i in (highlight_id, user_node_id, assistant_id) if i])
+    start_generation(session_id, user_node_id, assistant_id, body.model, api_key)
 
     return GenerateResponse(
-        user_node_id=user_id,
+        user_node_id=user_node_id,
         assistant_node_id=assistant_id,
         highlight_node_id=highlight_id,
         session_title=session_title,

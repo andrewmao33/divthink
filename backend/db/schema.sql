@@ -65,3 +65,13 @@ CREATE TABLE edges (
 -- Ancestor walk: find a node's parents by child_id.
 -- (Lookups by parent_id use the UNIQUE (parent_id, child_id) index.)
 CREATE INDEX edges_child_id_idx ON edges (child_id);
+
+-- Supabase exposes tables in the public schema through its REST API using the
+-- browser's publishable key. Row level security with no policies blocks that
+-- access entirely. The backend connects as the tables' owner, which RLS doesn't
+-- apply to, so it is the only way in.
+ALTER TABLE users    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE nodes    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE edges    ENABLE ROW LEVEL SECURITY;
