@@ -55,3 +55,16 @@
   font-size: var(--text-sm);
   color: var(--color-text-muted);
 }
+
+.legal {
+  margin: 24px 0 0;
+  font-size: var(--text-sm);
+}
+
+.legal a {
+  color: var(--color-text-muted);
+}
+
+.legal a:hover {
+  color: var(--color-text);
+}

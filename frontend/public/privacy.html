@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="data:," />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>divthink — Privacy Policy</title>
+    <style>
+      :root {
+        --text: #171717;
+        --muted: #737373;
+        --bg: #fafafa;
+        --accent: #4f46e5;
+      }
+      body {
+        max-width: 42rem;
+        margin: 0 auto;
+        padding: 48px 20px 80px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        line-height: 1.6;
+      }
+      h1 { font-size: 1.75rem; margin: 0 0 4px; }
+      h2 { font-size: 1.05rem; margin: 32px 0 8px; }
+      .updated { margin: 0 0 32px; color: var(--muted); font-size: 0.9rem; }
+      ul { padding-left: 1.2em; }
+      li { margin: 4px 0; }
+      a { color: var(--accent); }
+      footer { margin-top: 48px; color: var(--muted); font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Privacy Policy</h1>
+    <p class="updated">divthink · last updated 16 September 2026</p>
+
+    <p>
+      divthink is a canvas for branching conversations with AI models. This page explains what the
+      service stores, who it shares data with, and how to have it deleted.
+    </p>
+
+    <h2>What is stored</h2>
+    <ul>
+      <li><strong>Your account:</strong> the email address and account identifier provided by Google when you sign in.</li>
+      <li><strong>Your canvases:</strong> the prompts you write, the replies the AI models return, the connections between them, and their positions.</li>
+      <li><strong>Your API keys:</strong> encrypted before being stored. They are decrypted only to generate your replies, are never displayed again, and are never sent to your browser.</li>
+      <li><strong>Timestamps</strong> for the items above.</li>
+    </ul>
+
+    <h2>What is not stored</h2>
+    <ul>
+      <li>No passwords: sign-in is handled by Google.</li>
+      <li>No payment details: you use your own AI provider account.</li>
+      <li>No advertising or analytics trackers.</li>
+    </ul>
+
+    <h2>Who your data is shared with</h2>
+    <ul>
+      <li><strong>Anthropic or Google</strong>, depending on the model you choose: your prompts and the earlier messages of that conversation are sent to generate a reply, using your own API key. Their terms and privacy policies then apply to that request.</li>
+      <li><strong>Service providers</strong> that run divthink: Vercel (website), Railway (server), and Supabase (database and sign-in).</li>
+      <li>Nobody else. Your data is not sold or used for advertising, and other signed-in users cannot see your canvases.</li>
+    </ul>
+
+    <h2>Your browser</h2>
+    <p>
+      Your sign-in session and the model you last picked are kept in your browser's local storage.
+      No advertising or tracking cookies are used.
+    </p>
+
+    <h2>Keeping and deleting data</h2>
+    <ul>
+      <li>Your canvases stay until you delete them in the app.</li>
+      <li>You can remove a saved API key at any time from the menu under “API keys”.</li>
+      <li>To delete your account and everything in it, contact us (below) from the email address you signed in with.</li>
+    </ul>
+
+    <h2>Security</h2>
+    <p>
+      Traffic is encrypted in transit. API keys are encrypted at rest with a key held separately from
+      the database. Database access is restricted so that only the divthink server can read your data.
+      No service can promise perfect security, so please use a provider API key with spending limits.
+    </p>
+
+    <h2>Children</h2>
+    <p>divthink is not intended for children under 13.</p>
+
+    <h2>Changes</h2>
+    <p>
+      If this policy changes, the date at the top will change with it. Significant changes will be
+      noted on this page.
+    </p>
+
+    <h2>Contact</h2>
+    <p>
+      Questions, or requests to delete your data:
+      <a href="mailto:andrewmao33@gmail.com">andrewmao33@gmail.com</a>.
+    </p>
+
+    <footer><a href="/">← Back to divthink</a></footer>
+  </body>
+</html>

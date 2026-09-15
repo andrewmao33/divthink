@@ -29,6 +29,9 @@ function SignIn() {
         </button>
         {error && <p className={styles.error}>{error}</p>}
         <p className={styles.note}>After signing in, add your own Anthropic or Google API key.</p>
+        <p className={styles.legal}>
+          <a href="/privacy.html">Privacy</a>
+        </p>
       </div>
     </main>
   )
