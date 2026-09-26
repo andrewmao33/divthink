@@ -7,6 +7,7 @@ from uuid import UUID
 from . import events
 from .context import assemble_context
 from .db import get_pool
+from .prompt import BASE_PROMPT
 from .providers import claude, gemini
 from .providers.base import Chunk, Message, ProviderError
 from .providers.catalog import MODELS
@@ -16,8 +17,9 @@ log = logging.getLogger(__name__)
 
 MAX_CONCURRENT = 5  # design.md, "Concurrency"
 
-# Provider name (from providers/catalog.py) -> its stream function (model, messages, api_key).
-PROVIDERS: dict[str, Callable[[str, list[Message], str], AsyncIterator[Chunk]]] = {
+# Provider name (from providers/catalog.py) -> its stream function
+# (model, messages, api_key, system).
+PROVIDERS: dict[str, Callable[[str, list[Message], str, str], AsyncIterator[Chunk]]] = {
     "google": gemini.stream,
     "anthropic": claude.stream,
 }
@@ -56,7 +58,7 @@ async def _generate(
             headings_sent = 0
             started = time.monotonic()
             thinking_seconds = None  # request start -> first answer text, if it thought
-            async for chunk in stream(model, messages, api_key):
+            async for chunk in stream(model, messages, api_key, BASE_PROMPT):
                 if chunk.kind == "thought":
                     if not thoughts:
                         events.reply_thinking(session_id, node)
@@ -72,7 +74,8 @@ async def _generate(
                     answer += chunk.text
                     events.reply_token(session_id, node, chunk.text)
 
-            if not answer.strip():
+            reply = answer.strip()
+            if not reply:
                 raise ProviderError("The model returned an empty reply. Try again.")
 
             metadata = (
@@ -93,11 +96,11 @@ async def _generate(
                 SET content = $2, status = 'complete', metadata = (metadata - 'error') || $3::jsonb
                 WHERE id = $1
                 """,
-                assistant_node_id, answer.strip(), metadata,
+                assistant_node_id, reply, metadata,
             )
             events.publish(session_id, "done", {
                 "node_id": node,
-                "content": answer.strip(),
+                "content": reply,
                 "thought_headings": metadata.get("thought_headings", []),
                 "thinking_seconds": metadata.get("thinking_seconds"),
             })

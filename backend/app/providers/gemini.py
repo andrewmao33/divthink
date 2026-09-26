@@ -17,7 +17,9 @@ def _to_gemini(messages: list[Message]) -> list[types.Content]:
     ]
 
 
-async def stream(model: str, messages: list[Message], api_key: str) -> AsyncIterator[Chunk]:
+async def stream(
+    model: str, messages: list[Message], api_key: str, system: str
+) -> AsyncIterator[Chunk]:
     """Yield the reply piece by piece: thinking summaries first, then the answer.
 
     A client per reply, closed afterwards, so the user's key isn't kept around.
@@ -28,6 +30,9 @@ async def stream(model: str, messages: list[Message], api_key: str) -> AsyncIter
             model=model,
             contents=_to_gemini(messages),
             config=types.GenerateContentConfig(
+                # Google's name for the system prompt. Kept out of `contents` so it
+                # isn't part of the conversation history.
+                system_instruction=system,
                 # We don't give the model Python functions to call; turning this off
                 # also silences the SDK's AFC warning.
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),

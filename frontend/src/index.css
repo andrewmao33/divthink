@@ -1,26 +1,37 @@
 /* Global styles and design tokens. Component styles live next to each
-   component in *.module.css files (CSS Modules: class names are scoped). */
+   component in *.module.css files (CSS Modules: class names are scoped).
+
+   One palette for the whole product: the canvas and the landing page share
+   these values, so the app looks like the page that introduces it. */
 
 :root {
-  /* Colors: neutrals plus one accent (design.md, "Visual direction").
-     Placeholder values, tune freely. */
-  --color-bg: #fafafa;
+  /* Warm off-white ground, true black text. Secondary text is that same black
+     at 56% alpha rather than a separate grey, so it can never clash. */
+  --color-bg: #f7f6f5;
   --color-surface: #ffffff;
-  --color-border: #e5e5e5;
-  --color-text: #171717;
-  --color-text-muted: #a3a3a3;
-  --color-accent: #4f46e5;
-  --color-edge: #d4d4d4;
+  --color-text: #000000;
+  --color-text-muted: #1919198f;
+
+  /* Hairlines are black at low alpha: they tint whatever is behind them instead
+     of covering it. Edges are a little stronger — they cross open canvas, where
+     an 8% line disappears. */
+  --color-border: #00000014;
+  --color-edge: #00000026;
+
+  /* No accent colour. Emphasis comes from black, like the landing page. */
+  --color-accent: #000000;
   --color-error: #b91c1c;
 
   /* Type */
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --font-sans: 'Inter Tight', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Monaco, monospace;
   --text-sm: 0.875rem;
   --text-base: 1rem;
   --text-lg: 1.125rem;
 
-  --radius: 8px;
+  /* Square corners throughout. */
+  --radius: 0;
 }
 
 *,

@@ -50,6 +50,8 @@ type CanvasState = {
   // Sends a prompt whose parents are the selected boxes (none: a new tree).
   sendPrompt: (prompt: string) => Promise<boolean>
   deleteSelected: () => Promise<void>
+  // Deletes specific boxes (the right-click menu), with the same confirmation.
+  deleteNodeIds: (nodeIds: string[]) => Promise<void>
   confirmDelete: () => Promise<void>
   cancelDelete: () => void
   savePositions: (boxes: BoxNode[]) => void
@@ -142,6 +144,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       const created = await generate(session.id, {
         prompt,
         parent_ids: parentIds,
+        parent_heights: measuredHeights(nodes, [...parentIds, highlight?.sourceNodeId]),
         ...(model && { model }),
         ...(highlight && {
           highlight: { source_node_id: highlight.sourceNodeId, text: highlight.text },
@@ -159,9 +162,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
         session: s.session && { ...s.session, title: created.session_title },
         highlight: null,
         sending: false,
-        focusNodeIds: [created.highlight_node_id, created.user_node_id, created.assistant_node_id].filter(
-          (id): id is string => id !== null,
-        ),
+        focusNodeIds: [created.user_node_id, created.assistant_node_id],
       }))
       return true
     } catch (e) {
@@ -171,12 +172,16 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   },
 
   deleteSelected: async () => {
-    const { session, nodes, pendingDelete } = get()
-    const nodeIds = nodes.filter((box) => box.selected).map((box) => box.id)
+    const selected = get().nodes.filter((box) => box.selected).map((box) => box.id)
+    await get().deleteNodeIds(selected)
+  },
+
+  deleteNodeIds: async (nodeIds) => {
+    const { session, pendingDelete } = get()
     if (!session || nodeIds.length === 0 || pendingDelete) return
     set({ notice: null })
     try {
-      // Ask the server what would go. Confirm only when it's more than what's selected.
+      // Ask the server what would go. Confirm only when it's more than what was asked for.
       const { deleted_node_ids } = await deleteNodes(session.id, nodeIds, true)
       if (deleted_node_ids.length > nodeIds.length) {
         set({ pendingDelete: { nodeIds, count: deleted_node_ids.length } })
@@ -233,6 +238,20 @@ async function deleteForGood(nodeIds: string[]) {
 function withoutNodes(s: CanvasState, nodeIds: string[]) {
   const quoteGone = s.highlight !== null && nodeIds.includes(s.highlight.sourceNodeId)
   return { ...removeNodes(s, nodeIds), highlight: quoteGone ? null : s.highlight }
+}
+
+// How tall the given boxes are on screen. React Flow measures them after render;
+// a box that hasn't been measured yet is left out, and the server falls back to
+// its own estimate. Boxes are as tall as their text, so without this the server
+// would place new boxes on top of long replies.
+function measuredHeights(nodes: BoxNode[], ids: (string | undefined)[]): Record<string, number> {
+  const wanted = new Set(ids.filter((id): id is string => Boolean(id)))
+  const heights: Record<string, number> = {}
+  for (const box of nodes) {
+    const height = box.measured?.height
+    if (wanted.has(box.id) && height) heights[box.id] = Math.round(height)
+  }
+  return heights
 }
 
 // ---- Live stream ----------------------------------------------------------------

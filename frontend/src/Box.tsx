@@ -40,7 +40,13 @@ function BoxBody({ node, live }: { node: ApiNode; live?: LiveReply }) {
   }
   // Prompts and quotes are shown exactly as typed; replies are markdown.
   if (node.type !== 'assistant') {
-    return <p className={styles.text}>{node.content}</p>
+    const quote = highlightOf(node)
+    return (
+      <>
+        {quote && <blockquote className={styles.quote}>{quote}</blockquote>}
+        <p className={styles.text}>{node.content}</p>
+      </>
+    )
   }
   return (
     // Reply text is selectable so it can be highlighted and branched from (nodrag:
@@ -97,6 +103,15 @@ function useSecondsSince(startedAt: number): number {
     return () => clearInterval(timer)
   }, [])
   return Math.max(0, Math.floor((now - startedAt) / 1000))
+}
+
+// The passage this prompt branched from. It's kept on the prompt itself; on older
+// canvases the quote is a box of its own, which renders as a plain 'highlight' node.
+function highlightOf(node: ApiNode): string | null {
+  const highlight = node.metadata.highlight
+  if (typeof highlight !== 'object' || highlight === null) return null
+  const text = (highlight as { text?: unknown }).text
+  return typeof text === 'string' && text.trim() ? text : null
 }
 
 function asNumber(value: unknown): number | null {

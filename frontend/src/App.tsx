@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { authEnabled, supabase, type Session } from './auth'
 import Canvas from './Canvas'
-import SignIn from './SignIn'
+import Landing from './Landing'
 import { resetCanvas } from './store'
 
 function App() {
@@ -20,7 +20,7 @@ function App() {
 
   if (!authEnabled) return <Canvas /> // local development without sign-in
   if (session === undefined) return null
-  return session ? <Canvas /> : <SignIn />
+  return session ? <Canvas /> : <Landing />
 }
 
 export default App

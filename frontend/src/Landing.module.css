@@ -1,0 +1,274 @@
+/* The landing page, shown to signed-out visitors.
+   Tokens are scoped to .page on purpose: the canvas keeps its own look, so
+   restyling this page can never move anything inside the app. */
+
+.page {
+  /* Shorthands for the shared palette in index.css. */
+  --bg: var(--color-bg);
+  --text: var(--color-text);
+  --text-muted: var(--color-text-muted);
+  --rule: var(--color-border);
+  --button: var(--color-text);
+
+  --container-padding: 20px;
+  --node-gap: 32px; /* space between connected boxes, and so the connector length */
+  --measure: 760px; /* centre column; --half-measure must stay half of it */
+  --half-measure: 380px;
+
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+/* One real breakpoint. Everything between is fluid. */
+@media (min-width: 48rem) {
+  .page {
+    --container-padding: 64px;
+  }
+}
+
+.container {
+  position: relative;
+  padding-inline: var(--container-padding);
+}
+
+/* The middle column IS the text block, so a rule on its leading edge lands
+   exactly where the text starts, and the block sits centred on the page.
+   The 1fr columns either side collapse to nothing on a narrow screen, which
+   is the whole responsive story. */
+.grid {
+  position: relative;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr min(var(--measure), 100%) 1fr;
+}
+
+/* ---- The rules ------------------------------------------------------------
+   Absolutely positioned rather than placed on the grid: top/bottom pin them to
+   the full height, and each x position is one calc off the centre line, so
+   there is nothing to misalign. --measure must match the grid's centre column. */
+
+.rules {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.rule {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--rule);
+}
+
+/* Frame, at each edge of the padded container. */
+.ruleLeft {
+  left: 0;
+}
+
+.ruleRight {
+  right: 0;
+}
+
+/* The centre column's edges: 40px clear of the text on each side. */
+.ruleTextStart,
+.ruleTextEnd,
+.ruleGutter {
+  display: none;
+}
+
+@media (min-width: 48rem) {
+  .ruleTextStart,
+  .ruleTextEnd,
+  .ruleGutter {
+    display: block;
+  }
+  .ruleTextStart {
+    left: calc(50% - var(--half-measure));
+  }
+  .ruleTextEnd {
+    left: calc(50% + var(--half-measure));
+  }
+  .ruleGutter {
+    left: calc(50% - var(--half-measure) - 72px);
+  }
+}
+
+/* ---- Layout ---------------------------------------------------------------- */
+
+.content {
+  position: relative;
+  z-index: 1;
+  grid-column: 2;
+  padding-block: 24px 72px;
+}
+
+/* Boxes are dragged inside this and clamped to it, so they cannot overlap the
+   footer or escape past the frame rules. */
+.stage {
+  position: relative;
+  min-height: 420px;
+}
+
+@media (min-width: 48rem) {
+  .stage {
+    min-height: 520px;
+  }
+}
+
+.node {
+  /* h1 and button carry default margins, and on an absolutely positioned box a
+     margin shifts it away from its computed top — which made the gap above the
+     description short by the h1's 0.67em. */
+  margin: 0;
+  /* Boxes carry their own background: an edge passing behind one must not show
+     through it. */
+  background: var(--bg);
+  touch-action: none; /* let a drag be a drag, not a page scroll */
+  cursor: grab;
+  user-select: none;
+}
+
+.node:active {
+  cursor: grabbing;
+}
+
+.edges {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  color: var(--rule);
+  overflow: visible;
+}
+
+@media (min-width: 48rem) {
+  .content {
+    padding-block: 40px 120px;
+  }
+}
+
+/* ---- Type ------------------------------------------------------------------ */
+
+.headingBox {
+  width: min(680px, 100%);
+}
+
+/* Block, so the box fills the column and the word sits at its left edge —
+   matching the description box below it. */
+.headingBox {
+  display: block;
+  text-align: left;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--rule);
+  font-family: 'Inter Tight', system-ui, sans-serif;
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+@media (min-width: 48rem) {
+  .headingBox {
+    padding: 14px 18px 16px;
+    font-size: 38px;
+  }
+}
+
+.bodyBox {
+  width: min(680px, 100%);
+  padding: 14px;
+  border: 1px solid var(--rule);
+}
+
+.bodyBox p {
+  margin: 0 0 12px;
+}
+
+.bodyBox p:last-child {
+  margin-bottom: 0;
+}
+
+@media (min-width: 48rem) {
+  .bodyBox {
+    padding: 18px;
+  }
+}
+
+.muted {
+  color: var(--text);
+}
+
+/* ---- Buttons --------------------------------------------------------------- */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: var(--node-gap);
+}
+
+/* Square corners throughout. */
+.button {
+  position: relative;
+  padding: 11px 20px;
+  border: 1px solid var(--rule);
+  border-radius: 0;
+  background: var(--button);
+  font-family: 'Inter Tight', system-ui, sans-serif;
+  font-size: 15px;
+  color: #fff;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  opacity: 1;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.buttonOutline {
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--text);
+}
+
+.buttonOutline:hover {
+  background: var(--button);
+  color: #fff;
+  opacity: 1;
+}
+
+.error {
+  margin: 16px 0 0;
+  font-size: 15px;
+  color: #b91c1c;
+}
+
+.footer {
+  /* Same width and centring as the boxes, so its rule and its text line up with
+     them instead of running the full column. */
+  width: min(680px, 100%);
+  margin: 0 auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  font-family: 'Inter Tight', system-ui, sans-serif;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.footer a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

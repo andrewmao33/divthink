@@ -98,12 +98,15 @@ export type GenerateRequest = {
   model?: string
   // Branching from highlighted text in a reply.
   highlight?: { source_node_id: string; text: string }
+  // How tall each parent box is on screen, keyed by node id. A box is as tall as
+  // its text, and only the browser knows that, so without this the server would
+  // have to guess and would drop new boxes on top of long replies.
+  parent_heights?: Record<string, number>
 }
 
 export type GenerateResponse = {
   user_node_id: string
   assistant_node_id: string
-  highlight_node_id: string | null
   session_title: string
 }
 

@@ -8,14 +8,16 @@ import Box from './Box'
 import styles from './Canvas.module.css'
 import CanvasMenu from './CanvasMenu'
 import ChatBox from './ChatBox'
+import ContextMenu, { type MenuItem } from './ContextMenu'
 import { isEditing } from './dom'
+import FloatingEdge from './FloatingEdge'
 import KeysDialog from './KeysDialog'
-import ReplyMenu from './ReplyMenu'
 import { useCanvasStore } from './store'
 
 const nodeTypes = { box: Box }
+const edgeTypes = { floating: FloatingEdge }
 
-type Menu = { x: number; y: number; nodeId: string; text: string }
+type Menu = { x: number; y: number; items: MenuItem[] }
 
 function Canvas() {
   const {
@@ -30,6 +32,7 @@ function Canvas() {
     onNodesChange,
     savePositions,
     deleteSelected,
+    deleteNodeIds,
     cancelDelete,
     startBranch,
   } = useCanvasStore(
@@ -45,6 +48,7 @@ function Canvas() {
       onNodesChange: s.onNodesChange,
       savePositions: s.savePositions,
       deleteSelected: s.deleteSelected,
+      deleteNodeIds: s.deleteNodeIds,
       cancelDelete: s.cancelDelete,
       startBranch: s.startBranch,
     })),
@@ -81,13 +85,57 @@ function Canvas() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [deleteSelected, cancelDelete])
 
-  // Our menu only for a right-click on highlighted text inside a finished reply;
-  // everywhere else the browser's normal menu.
+  // One handler for both menus: highlighted text inside a finished reply offers
+  // Branch/Copy, a box offers Delete, and anywhere else the browser's own menu.
+  // Highlighted text wins, so branching still works when right-clicking a reply.
   function onContextMenu(e: MouseEvent) {
     const quote = highlightedReplyText(e.target)
-    if (!quote) return
+    if (quote) {
+      e.preventDefault()
+      setMenu({
+        x: e.clientX,
+        y: e.clientY,
+        items: [
+          {
+            label: 'Branch',
+            onClick: () => {
+              startBranch(quote.nodeId, quote.text)
+              window.getSelection()?.removeAllRanges()
+              closeMenu()
+            },
+          },
+          {
+            label: 'Copy',
+            onClick: () => {
+              void navigator.clipboard.writeText(quote.text)
+              closeMenu()
+            },
+          },
+        ],
+      })
+      return
+    }
+
+    const nodeId = boxIdAt(e.target)
+    if (!nodeId) return
     e.preventDefault()
-    setMenu({ x: e.clientX, y: e.clientY, ...quote })
+    // Right-clicking inside a selection acts on all of it; otherwise just that box.
+    const selected = nodes.filter((box) => box.selected).map((box) => box.id)
+    const targets = selected.includes(nodeId) ? selected : [nodeId]
+    setMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        {
+          label: targets.length > 1 ? `Delete ${targets.length} boxes` : 'Delete',
+          danger: true,
+          onClick: () => {
+            void deleteNodeIds(targets)
+            closeMenu()
+          },
+        },
+      ],
+    })
   }
 
   if (status !== 'ready') {
@@ -109,6 +157,7 @@ function Canvas() {
         onNodeDragStop={(_event, _node, dragged) => savePositions(dragged)}
         onMoveStart={closeMenu}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         nodesConnectable={false}
         // Deleting goes through the server (the key handler above), never React Flow's local delete.
         deleteKeyCode={null}
@@ -123,26 +172,18 @@ function Canvas() {
       <CanvasMenu />
       {nodes.length === 0 && <p className={styles.notice}>Type below to start a conversation.</p>}
       {connection === 'reconnecting' && <p className={styles.connection}>Reconnecting…</p>}
-      {menu && (
-        <ReplyMenu
-          x={menu.x}
-          y={menu.y}
-          onClose={closeMenu}
-          onBranch={() => {
-            startBranch(menu.nodeId, menu.text)
-            window.getSelection()?.removeAllRanges()
-            closeMenu()
-          }}
-          onCopy={() => {
-            void navigator.clipboard.writeText(menu.text)
-            closeMenu()
-          }}
-        />
-      )}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={closeMenu} />}
       <ChatBox />
       <KeysDialog />
     </div>
   )
+}
+
+// The id of the box under the pointer, if any. React Flow puts data-id on the
+// wrapper it renders around each box.
+function boxIdAt(target: EventTarget): string | null {
+  const element = target instanceof Element ? target : null
+  return element?.closest('.react-flow__node')?.getAttribute('data-id') ?? null
 }
 
 // The highlighted text and its reply, if the current selection lies within one

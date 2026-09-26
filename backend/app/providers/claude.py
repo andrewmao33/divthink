@@ -7,7 +7,9 @@ from .base import Chunk, Message, ProviderError
 MAX_TOKENS = 16000
 
 
-async def stream(model: str, messages: list[Message], api_key: str) -> AsyncIterator[Chunk]:
+async def stream(
+    model: str, messages: list[Message], api_key: str, system: str
+) -> AsyncIterator[Chunk]:
     """Yield the reply piece by piece: thinking summaries first, then the answer.
 
     A client per reply, closed afterwards, so the user's key isn't kept around.
@@ -18,6 +20,9 @@ async def stream(model: str, messages: list[Message], api_key: str) -> AsyncIter
         async with client.messages.stream(
             model=model,
             max_tokens=MAX_TOKENS,
+            # Its own field, not a message: it stays out of the conversation history
+            # and identical across requests, which is what prefix caching needs.
+            system=system,
             # Adaptive: Claude decides whether to think. "summarized" returns readable
             # thinking; the default on current models streams it with empty text.
             thinking={"type": "adaptive", "display": "summarized"},

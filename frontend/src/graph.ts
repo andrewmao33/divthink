@@ -27,7 +27,9 @@ export function toBox(node: ApiNode): BoxNode {
 }
 
 export function toEdge(edge: ApiEdge): Edge {
-  return { id: edge.id, source: edge.parent_id, target: edge.child_id }
+  // 'floating': the line picks whichever sides of the two boxes face each other
+  // (FloatingEdge.tsx), so a branch beside its reply joins from the side.
+  return { id: edge.id, type: 'floating', source: edge.parent_id, target: edge.child_id }
 }
 
 // A server snapshot as the new truth. Boxes already on screen keep their position

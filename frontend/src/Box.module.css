@@ -1,11 +1,15 @@
+/* 560px holds roughly 75 characters a line at --text-sm, which is a comfortable
+   reading measure. Narrower boxes turned long replies into very tall columns.
+   Keep in step with SIBLING_GAP_X in backend/app/routes/generate.py. */
 .box {
-  width: 360px;
-  padding: 12px 14px;
+  width: 560px;
+  padding: 16px 18px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: 0;
   background: var(--color-surface);
+  font-family: var(--font-serif);
   font-size: var(--text-sm);
-  line-height: 1.5;
+  line-height: 1.6;
   color: var(--color-text);
 }
 
@@ -14,7 +18,18 @@
   background: var(--color-bg);
 }
 
-/* A highlighted quote from a reply. */
+/* A quote from a reply, shown above the prompt that branched from it. */
+.quote {
+  margin: 0 0 10px;
+  padding-left: 10px;
+  border-left: 3px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-style: italic;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Older canvases only: quotes used to be boxes of their own. */
 .highlight {
   border-left: 3px solid var(--color-border);
   color: var(--color-text-muted);

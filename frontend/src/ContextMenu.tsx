@@ -1,19 +1,23 @@
 import { useEffect, useRef } from 'react'
-import styles from './ReplyMenu.module.css'
+import styles from './ContextMenu.module.css'
+
+export type MenuItem = { label: string; onClick: () => void; danger?: boolean }
 
 type Props = {
   x: number
   y: number
-  onBranch: () => void
-  onCopy: () => void
+  items: MenuItem[]
   onClose: () => void
 }
 
 const MENU_WIDTH = 160
-const MENU_HEIGHT = 84
+const ITEM_HEIGHT = 30
+const MENU_PADDING = 8
+const SCREEN_MARGIN = 8
 
-// Right-click menu for text highlighted in a reply (design.md, "Interactions").
-function ReplyMenu({ x, y, onBranch, onCopy, onClose }: Props) {
+// Right-click menu, both for text highlighted in a reply (Branch/Copy) and for a
+// box itself (Delete). See design.md, "Interactions".
+function ContextMenu({ x, y, items, onClose }: Props) {
   const menuRef = useRef<HTMLDivElement>(null)
 
   // Close on a click elsewhere, Escape, scrolling/zooming, or resizing.
@@ -37,19 +41,25 @@ function ReplyMenu({ x, y, onBranch, onCopy, onClose }: Props) {
   }, [onClose])
 
   // Keep the menu on screen near the window edges.
-  const left = Math.min(x, window.innerWidth - MENU_WIDTH - 8)
-  const top = Math.min(y, window.innerHeight - MENU_HEIGHT - 8)
+  const height = items.length * ITEM_HEIGHT + MENU_PADDING
+  const left = Math.min(x, window.innerWidth - MENU_WIDTH - SCREEN_MARGIN)
+  const top = Math.min(y, window.innerHeight - height - SCREEN_MARGIN)
 
   return (
     <div ref={menuRef} className={styles.menu} style={{ left, top }} role="menu">
-      <button type="button" role="menuitem" className={styles.item} onClick={onBranch}>
-        Branch
-      </button>
-      <button type="button" role="menuitem" className={styles.item} onClick={onCopy}>
-        Copy
-      </button>
+      {items.map((item) => (
+        <button
+          key={item.label}
+          type="button"
+          role="menuitem"
+          className={[styles.item, item.danger && styles.danger].filter(Boolean).join(' ')}
+          onClick={item.onClick}
+        >
+          {item.label}
+        </button>
+      ))}
     </div>
   )
 }
 
-export default ReplyMenu
+export default ContextMenu

@@ -6,15 +6,15 @@
   width: 160px;
   padding: 4px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: 0;
   background: var(--color-surface);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 10%);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 6%);
 }
 
 .item {
   padding: 6px 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 0;
   background: none;
   font: inherit;
   font-size: var(--text-sm);
@@ -27,4 +27,9 @@
 .item:focus-visible {
   outline: none;
   background: var(--color-bg);
+}
+
+/* Deleting can't be undone, so it reads as destructive. */
+.danger {
+  color: var(--color-error);
 }
