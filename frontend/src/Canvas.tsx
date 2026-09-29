@@ -6,12 +6,12 @@ import { useCallback, useEffect, useState, type MouseEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import Box from './Box'
 import styles from './Canvas.module.css'
-import CanvasMenu from './CanvasMenu'
 import ChatBox from './ChatBox'
 import ContextMenu, { type MenuItem } from './ContextMenu'
 import { isEditing } from './dom'
 import FloatingEdge from './FloatingEdge'
 import KeysDialog from './KeysDialog'
+import Sidebar from './Sidebar'
 import { useCanvasStore } from './store'
 
 const nodeTypes = { box: Box }
@@ -140,15 +140,17 @@ function Canvas() {
 
   if (status !== 'ready') {
     return (
-      <div className={styles.canvas}>
-        <CanvasMenu />
-        <p className={styles.notice}>{status === 'error' ? error : 'Loading…'}</p>
-        <KeysDialog />
-      </div>
+      <Sidebar>
+        <div className={styles.canvas}>
+          <p className={styles.notice}>{status === 'error' ? error : 'Loading…'}</p>
+          <KeysDialog />
+        </div>
+      </Sidebar>
     )
   }
 
   return (
+    <Sidebar>
     <div className={styles.canvas} onContextMenu={onContextMenu}>
       <ReactFlow
         nodes={nodes}
@@ -169,13 +171,13 @@ function Canvas() {
       >
         <FollowNewNodes />
       </ReactFlow>
-      <CanvasMenu />
       {nodes.length === 0 && <p className={styles.notice}>Type below to start a conversation.</p>}
       {connection === 'reconnecting' && <p className={styles.connection}>Reconnecting…</p>}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={closeMenu} />}
       <ChatBox />
       <KeysDialog />
     </div>
+    </Sidebar>
   )
 }
 
