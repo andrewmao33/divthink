@@ -1,4 +1,4 @@
-import { ReactFlow, useReactFlow } from '@xyflow/react'
+import { PanOnScrollMode, ReactFlow, useReactFlow } from '@xyflow/react'
 // React Flow's required styles only, not its theme. Its few visual defaults are
 // CSS variables, which Canvas.module.css points at our own tokens.
 import '@xyflow/react/dist/base.css'
@@ -14,12 +14,14 @@ import KeysDialog from './KeysDialog'
 import Sidebar from './Sidebar'
 import { useCanvasStore } from './store'
 
+const MARGIN = 24 // breathing room between the first box and the corner
+
 const nodeTypes = { box: Box }
 const edgeTypes = { floating: FloatingEdge }
 
 type Menu = { x: number; y: number; items: MenuItem[] }
 
-function Canvas() {
+function Canvas({ demoId }: { demoId?: string }) {
   const {
     status,
     error,
@@ -33,8 +35,11 @@ function Canvas() {
     savePositions,
     deleteSelected,
     deleteNodeIds,
+    reformat,
     cancelDelete,
     startBranch,
+    readOnly,
+    loadPublicSession,
   } = useCanvasStore(
     useShallow((s) => ({
       status: s.status,
@@ -49,21 +54,28 @@ function Canvas() {
       savePositions: s.savePositions,
       deleteSelected: s.deleteSelected,
       deleteNodeIds: s.deleteNodeIds,
+      reformat: s.reformat,
       cancelDelete: s.cancelDelete,
       startBranch: s.startBranch,
+      readOnly: s.readOnly,
+      loadPublicSession: s.loadPublicSession,
     })),
   )
   const [menu, setMenu] = useState<Menu | null>(null)
   const closeMenu = useCallback(() => setMenu(null), [])
 
   useEffect(() => {
+    if (demoId) {
+      void loadPublicSession(demoId)
+      return
+    }
     void loadSession(new URLSearchParams(window.location.search).get('session'))
     void loadModels()
-  }, [loadSession, loadModels])
+  }, [demoId, loadPublicSession, loadSession, loadModels])
 
   // Keep the open canvas in the URL, so refreshing reopens it.
   useEffect(() => {
-    if (!session) return
+    if (!session || readOnly) return
     const url = new URL(window.location.href)
     url.searchParams.set('session', session.id)
     window.history.replaceState(null, '', url)
@@ -149,8 +161,7 @@ function Canvas() {
     )
   }
 
-  return (
-    <Sidebar>
+  const canvas = (
     <div className={styles.canvas} onContextMenu={onContextMenu}>
       <ReactFlow
         nodes={nodes}
@@ -161,23 +172,56 @@ function Canvas() {
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         nodesConnectable={false}
+        // Trackpad conventions, as in Figma: two-finger swipe moves the canvas,
+        // pinch zooms. React Flow zooms on scroll by default, and a two-finger
+        // swipe arrives as a scroll event, so that has to be turned off.
+        panOnScroll
+        panOnScrollSpeed={1.2}
+        panOnScrollMode={PanOnScrollMode.Free}
+        zoomOnScroll={false}
+        zoomOnPinch
+        panOnDrag
         // Deleting goes through the server (the key handler above), never React Flow's local delete.
         deleteKeyCode={null}
         // Click selects one box; Shift- or Cmd-click adds more (a merge).
         multiSelectionKeyCode={['Shift', 'Meta']}
         fitView
-        minZoom={0.1}
+        // Never smaller than 40%: below that the text is unreadable, and there
+        // is no way back except guessing.
+        fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
+        minZoom={0.4}
         maxZoom={2}
       >
         <FollowNewNodes />
+        <GoHome />
       </ReactFlow>
+      {nodes.length > 1 && (
+        <button type="button" className={styles.reformat} onClick={reformat}>
+          Reformat
+        </button>
+      )}
       {nodes.length === 0 && <p className={styles.notice}>Type below to start a conversation.</p>}
       {connection === 'reconnecting' && <p className={styles.connection}>Reconnecting…</p>}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={closeMenu} />}
-      <ChatBox />
-      <KeysDialog />
+      {readOnly ? <DemoBar /> : <ChatBox />}
+      {!readOnly && <KeysDialog />}
     </div>
-    </Sidebar>
+  )
+
+  return readOnly ? canvas : <Sidebar>{canvas}</Sidebar>
+}
+
+// Shown instead of the chat box on the public canvas.
+function DemoBar() {
+  return (
+    <div className={styles.demoBar}>
+      <span>
+        A canvas you can read, pan and zoom. Sign in to make your own.
+      </span>
+      <a className={styles.demoButton} href="/">
+        Sign in
+      </a>
+    </div>
   )
 }
 
@@ -207,6 +251,20 @@ function highlightedReplyText(target: EventTarget): { nodeId: string; text: stri
   return nodeId ? { nodeId, text } : null
 }
 
+// Puts the canvas origin back in the top-left corner. Reformat packs everything
+// from (0, 0), so fitView would centre the result and leave a gap down the left.
+function GoHome() {
+  const homeView = useCanvasStore((s) => s.homeView)
+  const { setViewport, getZoom } = useReactFlow()
+
+  useEffect(() => {
+    if (!homeView) return
+    void setViewport({ x: MARGIN, y: MARGIN, zoom: getZoom() }, { duration: 300 })
+  }, [homeView, setViewport, getZoom])
+
+  return null
+}
+
 // Moves the view to the boxes a sent prompt created. Rendered inside <ReactFlow>
 // so it can use React Flow's viewport controls.
 function FollowNewNodes() {
@@ -215,7 +273,7 @@ function FollowNewNodes() {
 
   useEffect(() => {
     if (!focusNodeIds) return
-    void fitView({ nodes: focusNodeIds.map((id) => ({ id })), duration: 300, maxZoom: 1, padding: 0.4 })
+    void fitView({ nodes: focusNodeIds.map((id) => ({ id })), duration: 300, maxZoom: 1, padding: 0.2 })
   }, [focusNodeIds, fitView])
 
   return null

@@ -26,7 +26,7 @@
 .item:hover,
 .item:focus-visible {
   outline: none;
-  background: var(--color-bg);
+  background: var(--hover-tint);
 }
 
 /* Deleting can't be undone, so it reads as destructive. */

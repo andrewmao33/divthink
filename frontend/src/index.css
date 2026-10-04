@@ -21,14 +21,34 @@
   /* No accent colour. Emphasis comes from black, like the landing page. */
   --color-accent: #000000;
   --color-error: #b91c1c;
+  /* Text on a filled black surface. Named rather than #fff everywhere, so an
+     inverted surface only has to change in one place. */
+  --color-on-accent: #ffffff;
+
+  /* Interaction. The tint is an alpha, so one value reads correctly on both the
+     off-white ground and the white panels — a solid colour would only suit one
+     of them, which is why menus and sidebar rows had drifted apart. */
+  --hover-tint: #0000000a;
+  --color-accent-hover: #262626;
 
   /* Type */
   --font-sans: 'Inter Tight', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Monaco, monospace;
-  --text-sm: 0.875rem;
+  --text-xs: 0.75rem; /* token counts, dates, section labels */
+  --text-sm: 0.875rem; /* the UI default */
+  --text-body: 0.9375rem; /* 15px: node content, sized for reading */
   --text-base: 1rem;
   --text-lg: 1.125rem;
+
+  /* A 4px spacing scale. Before this there were twenty different pixel values
+     in use, most of them one or two off each other for no reason. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
 
   /* Square corners throughout. */
   --radius: 0;

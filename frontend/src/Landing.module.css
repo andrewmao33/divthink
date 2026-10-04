@@ -1,26 +1,29 @@
 /* The landing page, shown to signed-out visitors.
-   Tokens are scoped to .page on purpose: the canvas keeps its own look, so
-   restyling this page can never move anything inside the app. */
+   Tokens are aliases of the shared palette in index.css: the canvas and this
+   page are one product, so neither keeps its own copy of the colours. */
 
 .page {
-  /* Shorthands for the shared palette in index.css. */
   --bg: var(--color-bg);
   --text: var(--color-text);
   --text-muted: var(--color-text-muted);
   --rule: var(--color-border);
   --button: var(--color-text);
+  --on-button: var(--color-on-accent);
+  --error: var(--color-error);
 
   --container-padding: 20px;
-  --node-gap: 32px; /* space between connected boxes, and so the connector length */
-  --measure: 760px; /* centre column; --half-measure must stay half of it */
-  --half-measure: 380px;
+  --measure: 680px; /* the reading column; --half-measure must stay half of it */
+  --half-measure: 340px;
+  --rule-gap: 48px; /* clearance between the content and the vertical rules */
+
+  --sans: 'Inter Tight', system-ui, sans-serif;
 
   min-height: 100%;
   background: var(--bg);
   color: var(--text);
   font-family: 'Source Serif 4', Georgia, serif;
   font-size: 15px;
-  line-height: 1.45;
+  line-height: 1.55;
 }
 
 /* One real breakpoint. Everything between is fluid. */
@@ -35,21 +38,14 @@
   padding-inline: var(--container-padding);
 }
 
-/* The middle column IS the text block, so a rule on its leading edge lands
-   exactly where the text starts, and the block sits centred on the page.
-   The 1fr columns either side collapse to nothing on a narrow screen, which
-   is the whole responsive story. */
 .grid {
   position: relative;
   min-height: 100dvh;
-  display: grid;
-  grid-template-columns: 1fr min(var(--measure), 100%) 1fr;
 }
 
 /* ---- The rules ------------------------------------------------------------
-   Absolutely positioned rather than placed on the grid: top/bottom pin them to
-   the full height, and each x position is one calc off the centre line, so
-   there is nothing to misalign. --measure must match the grid's centre column. */
+   Absolutely positioned: top/bottom pin them to the full height, and each x is
+   one calc off the centre line, so there is nothing to misalign. */
 
 .rules {
   position: absolute;
@@ -66,7 +62,6 @@
   background: var(--rule);
 }
 
-/* Frame, at each edge of the padded container. */
 .ruleLeft {
   left: 0;
 }
@@ -75,7 +70,6 @@
   right: 0;
 }
 
-/* The centre column's edges: 40px clear of the text on each side. */
 .ruleTextStart,
 .ruleTextEnd,
 .ruleGutter {
@@ -89,85 +83,63 @@
     display: block;
   }
   .ruleTextStart {
-    left: calc(50% - var(--half-measure));
+    left: calc(50% - var(--half-measure) - var(--rule-gap));
   }
   .ruleTextEnd {
-    left: calc(50% + var(--half-measure));
+    left: calc(50% + var(--half-measure) + var(--rule-gap));
   }
   .ruleGutter {
-    left: calc(50% - var(--half-measure) - 72px);
+    left: calc(50% - var(--half-measure) - var(--rule-gap) - 72px);
   }
 }
 
-/* ---- Layout ---------------------------------------------------------------- */
+/* ---- Rhythm ---------------------------------------------------------------
+   Every section is centred on the same line and separated by the same space, so
+   the page reads as one column rather than a stack of unrelated blocks. */
 
 .content {
   position: relative;
   z-index: 1;
-  grid-column: 2;
-  padding-block: 24px 72px;
-}
-
-/* Boxes are dragged inside this and clamped to it, so they cannot overlap the
-   footer or escape past the frame rules. */
-.stage {
-  position: relative;
-  min-height: 420px;
-}
-
-@media (min-width: 48rem) {
-  .stage {
-    min-height: 520px;
-  }
-}
-
-.node {
-  /* h1 and button carry default margins, and on an absolutely positioned box a
-     margin shifts it away from its computed top — which made the gap above the
-     description short by the h1's 0.67em. */
-  margin: 0;
-  /* Boxes carry their own background: an edge passing behind one must not show
-     through it. */
-  background: var(--bg);
-  touch-action: none; /* let a drag be a drag, not a page scroll */
-  cursor: grab;
-  user-select: none;
-}
-
-.node:active {
-  cursor: grabbing;
-}
-
-.edges {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  color: var(--rule);
-  overflow: visible;
+  padding-block: 88px 96px;
 }
 
 @media (min-width: 48rem) {
   .content {
-    padding-block: 40px 120px;
+    padding-block: 140px 120px;
   }
 }
 
-/* ---- Type ------------------------------------------------------------------ */
-
-.headingBox {
-  width: min(680px, 100%);
+.hero,
+.how,
+.footer {
+  width: min(var(--measure), 100%);
+  margin-inline: auto;
 }
 
-/* Block, so the box fills the column and the word sits at its left edge —
-   matching the description box below it. */
-.headingBox {
-  display: block;
-  text-align: left;
-  padding: 12px 14px 14px;
+/* The full width between the frame rules — the canvas is the thing worth
+   looking at, and the reading column would waste two thirds of the screen. */
+.demo {
+  width: 100%;
+  padding-top: 96px;
+}
+
+.how {
+  padding-top: 96px;
+}
+
+/* ---- The hero diagram -----------------------------------------------------
+   Boxes joined by connectors: the product's own shape, held still. */
+
+.headingBox,
+.bodyBox {
+  padding: 18px 20px;
   border: 1px solid var(--rule);
-  font-family: 'Inter Tight', system-ui, sans-serif;
+  background: var(--bg);
+}
+
+.headingBox {
+  margin: 0;
+  font-family: var(--sans);
   font-size: 26px;
   font-weight: 400;
   line-height: 1.25;
@@ -175,16 +147,13 @@
 }
 
 @media (min-width: 48rem) {
-  .headingBox {
-    padding: 14px 18px 16px;
-    font-size: 38px;
+  .headingBox,
+  .bodyBox {
+    padding: 22px 26px;
   }
-}
-
-.bodyBox {
-  width: min(680px, 100%);
-  padding: 14px;
-  border: 1px solid var(--rule);
+  .headingBox {
+    font-size: 34px;
+  }
 }
 
 .bodyBox p {
@@ -195,41 +164,55 @@
   margin-bottom: 0;
 }
 
-@media (min-width: 48rem) {
-  .bodyBox {
-    padding: 18px;
-  }
+/* The line between one box and the next. A block element rather than a pseudo,
+   so the gap it fills and the line that fills it are the same thing. */
+.connector {
+  display: block;
+  width: 1px;
+  height: 28px;
+  margin-inline: auto;
+  background: var(--rule);
 }
 
-.muted {
-  color: var(--text);
-}
-
-/* ---- Buttons --------------------------------------------------------------- */
-
+/* Left-aligned under the description, with a line up to it from each button —
+   the same shape the canvas draws when one reply has two children. */
 .actions {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: var(--node-gap);
+  margin-top: 28px; /* the connectors fill exactly this */
 }
 
-/* Square corners throughout. */
+.button::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 1px;
+  height: 28px;
+  background: var(--rule);
+}
+
+/* Square corners throughout. position: relative so each button anchors its own
+   connector — without it the pseudo-elements resolve against .actions and both
+   lines land on top of each other in the middle. */
 .button {
   position: relative;
-  padding: 11px 20px;
-  border: 1px solid var(--rule);
+  padding: var(--space-3) var(--space-6);
+  border: 1px solid var(--button);
   border-radius: 0;
   background: var(--button);
-  font-family: 'Inter Tight', system-ui, sans-serif;
-  font-size: 15px;
-  color: #fff;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: var(--on-button);
   text-decoration: none;
   cursor: pointer;
 }
 
 .button:hover:not(:disabled) {
-  opacity: 1;
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
 }
 
 .button:disabled {
@@ -238,31 +221,83 @@
 }
 
 .buttonOutline {
-  border: 1px solid var(--rule);
+  border-color: var(--rule);
   background: transparent;
   color: var(--text);
 }
 
+/* Deliberately louder than the app's bordered buttons: this is the one place a
+   visitor is being invited to click. */
 .buttonOutline:hover {
   background: var(--button);
-  color: #fff;
-  opacity: 1;
+  border-color: var(--button);
+  color: var(--on-button);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
 }
 
 .error {
   margin: 16px 0 0;
-  font-size: 15px;
-  color: #b91c1c;
+  font-size: var(--text-sm);
+  color: var(--error);
+  text-align: center;
+}
+
+/* ---- Sections -------------------------------------------------------------- */
+
+.sectionLabel {
+  margin: 0 0 12px;
+  text-align: center;
+  font-family: var(--sans);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.how {
+  display: grid;
+  gap: 32px;
+}
+
+@media (min-width: 48rem) {
+  .how {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.stepNumber {
+  display: block;
+  margin-bottom: 10px;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.stepTitle {
+  margin: 0 0 8px;
+  font-family: var(--sans);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.stepBody {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
 }
 
 .footer {
-  /* Same width and centring as the boxes, so its rule and its text line up with
-     them instead of running the full column. */
-  width: min(680px, 100%);
-  margin: 0 auto;
+  display: flex;
+  gap: 20px;
+  margin-top: 96px;
   padding-top: 16px;
   border-top: 1px solid var(--rule);
-  font-family: 'Inter Tight', system-ui, sans-serif;
+  font-family: var(--sans);
   font-size: 13px;
   color: var(--text-muted);
 }
@@ -271,4 +306,9 @@
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+.footer a:hover,
+.footer a:focus-visible {
+  color: var(--text);
 }

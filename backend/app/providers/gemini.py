@@ -3,7 +3,19 @@ from collections.abc import AsyncIterator
 from google import genai
 from google.genai import errors, types
 
-from .base import Chunk, Message, ProviderError
+from .base import Chunk, Message, ProviderError, Usage
+
+
+def _parts(message: Message) -> list[types.Part]:
+    """Attachments first, then the text that refers to them. Gemini takes PDFs
+    and images through the same inline-bytes part."""
+    parts = [
+        types.Part.from_bytes(data=a.data, mime_type=a.media_type)
+        for a in message.attachments
+    ]
+    if message.content or not parts:
+        parts.append(types.Part(text=message.content))
+    return parts
 
 
 def _to_gemini(messages: list[Message]) -> list[types.Content]:
@@ -11,14 +23,14 @@ def _to_gemini(messages: list[Message]) -> list[types.Content]:
     return [
         types.Content(
             role="model" if m.role == "assistant" else "user",
-            parts=[types.Part(text=m.content)],
+            parts=_parts(m),
         )
         for m in messages
     ]
 
 
 async def stream(
-    model: str, messages: list[Message], api_key: str, system: str
+    model: str, messages: list[Message], api_key: str, system: str, web_search: bool = False
 ) -> AsyncIterator[Chunk]:
     """Yield the reply piece by piece: thinking summaries first, then the answer.
 
@@ -39,15 +51,28 @@ async def stream(
                 # Ask for thinking summaries so the UI can show what the model is
                 # working on before the answer starts. Only valid on thinking models.
                 thinking_config=types.ThinkingConfig(include_thoughts=True),
+                # Google's equivalent of Anthropic's web search tool. Grounding
+                # happens server-side; results come back inside the reply.
+                tools=[types.Tool(google_search=types.GoogleSearch())] if web_search else None,
             ),
         )
+        total = Usage()
         async for chunk in chunks:
+            # Each chunk carries running totals; the last one wins.
+            meta = getattr(chunk, "usage_metadata", None)
+            if meta is not None:
+                total = Usage(
+                    getattr(meta, "prompt_token_count", 0) or 0,
+                    getattr(meta, "candidates_token_count", 0) or 0,
+                    getattr(meta, "cached_content_token_count", 0) or 0,
+                )
             # chunk.text skips thought parts, so read the parts directly.
             for candidate in chunk.candidates or []:
                 parts = candidate.content.parts if candidate.content else None
                 for part in parts or []:
                     if part.text:  # skip empty and non-text parts
                         yield Chunk("thought" if part.thought else "text", part.text)
+        yield Chunk("usage", usage=total)
     except errors.APIError as e:
         raise ProviderError(_friendly_error(e)) from e
     finally:

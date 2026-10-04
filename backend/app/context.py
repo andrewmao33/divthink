@@ -4,7 +4,7 @@ from uuid import UUID
 
 import asyncpg
 
-from .providers.base import Message
+from .providers.base import Attachment, Message
 
 BRANCH_LABEL_MAX = 60
 
@@ -41,11 +41,26 @@ async def assemble_context(
     edges = await conn.fetch(
         "SELECT parent_id, child_id FROM edges WHERE child_id = ANY($1::uuid[])", list(nodes)
     )
+    # Files sent with a prompt travel with it into the model's context.
+    files: dict[UUID, list[Attachment]] = defaultdict(list)
+    for row in await conn.fetch(
+        """
+        SELECT node_id, media_type, bytes, filename FROM attachments
+        WHERE node_id = ANY($1::uuid[]) ORDER BY created_at, id
+        """,
+        list(nodes),
+    ):
+        files[row["node_id"]].append(
+            Attachment(row["media_type"], bytes(row["bytes"]), row["filename"] or "")
+        )
 
     parents_of: dict[UUID, list[UUID]] = defaultdict(list)
     for edge in edges:
         if edge["parent_id"] in nodes:
             parents_of[edge["child_id"]].append(edge["parent_id"])
+
+    for node_id, node in nodes.items():
+        nodes[node_id] = dict(node) | {"attachments": files.get(node_id, [])}
 
     targets = [node_id for node_id in node_ids if node_id in nodes]
     if len(targets) == 1:
@@ -178,12 +193,15 @@ def _highlight_of(node) -> str | None:
     return _as_quote(text) if text else None
 
 
-def _append(messages: list[Message], role: str, text: str) -> None:
+def _append(
+    messages: list[Message], role: str, text: str, files: list[Attachment] | None = None
+) -> None:
     """Back-to-back messages with the same role are combined into one."""
     if messages and messages[-1].role == role:
         messages[-1].content += "\n\n" + text
+        messages[-1].attachments.extend(files or [])
     else:
-        messages.append(Message(role, text))
+        messages.append(Message(role, text, list(files or [])))
 
 
 def _to_messages(ordered: list) -> list[Message]:
@@ -198,7 +216,12 @@ def _to_messages(ordered: list) -> list[Message]:
             quotes.append(_as_quote(text))
         elif node["type"] == "user":
             quoted = _highlight_of(node)  # the quote now rides on the prompt itself
-            _append(messages, "user", "\n\n".join(quotes + ([quoted] if quoted else []) + [text]))
+            _append(
+                messages,
+                "user",
+                "\n\n".join(quotes + ([quoted] if quoted else []) + [text]),
+                node.get("attachments"),
+            )
             quotes = []
         else:
             _append(messages, "assistant", text)

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from .. import events
 from ..auth import current_user
 from ..db import get_pool
+from ..generation import cancel_generation
 
 router = APIRouter(prefix="/sessions", tags=["nodes"])
 
@@ -19,6 +20,10 @@ class DeleteNodesRequest(BaseModel):
 
 class DeleteNodesResponse(BaseModel):
     deleted_node_ids: list[UUID]
+
+
+class TitleRequest(BaseModel):
+    title: str = Field(max_length=80)
 
 
 class Position(BaseModel):
@@ -54,13 +59,14 @@ async def delete_nodes(session_id: UUID, body: DeleteNodesRequest, user_id: UUID
                 "SELECT parent_id, child_id FROM edges WHERE session_id = $1", session_id
             )
             doomed = _with_orphaned_descendants(set(requested), edges)
-            if any(status[n] in ("pending", "streaming") for n in doomed):
-                raise HTTPException(
-                    status_code=409, detail="Can't delete while a reply is still being written."
-                )
             ordered = [r["id"] for r in rows if r["id"] in doomed]
 
             if not body.dry_run:
+                # Stop any reply still being written before its row goes, so the
+                # job can't write to a node that no longer exists.
+                running = [n for n in ordered if status[n] in ("pending", "streaming")]
+                if running:
+                    cancel_generation(running)
                 # Edges go with their nodes (ON DELETE CASCADE).
                 await conn.execute("DELETE FROM nodes WHERE id = ANY($1::uuid[])", ordered)
                 await conn.execute("UPDATE sessions SET updated_at = now() WHERE id = $1", session_id)
@@ -68,6 +74,61 @@ async def delete_nodes(session_id: UUID, body: DeleteNodesRequest, user_id: UUID
     if not body.dry_run:
         events.publish(session_id, "nodes_deleted", {"node_ids": [str(n) for n in ordered]})
     return DeleteNodesResponse(deleted_node_ids=ordered)
+
+
+@router.patch("/{session_id}/nodes/{node_id}/title", status_code=204)
+async def set_title(
+    session_id: UUID, node_id: UUID, body: TitleRequest, user_id: UUID = Depends(current_user)
+):
+    """Rename a box. An empty title clears it, falling back to the generated one
+    being gone entirely rather than storing a blank."""
+    title = " ".join(body.title.split())
+    async with get_pool().acquire() as conn:
+        await _lock_session(conn, session_id, user_id)
+        updated = await conn.fetchval(
+            """
+            UPDATE nodes
+            SET metadata = CASE
+                WHEN $3::text = '' THEN metadata - 'title'
+                ELSE metadata || jsonb_build_object('title', $3::text)
+            END
+            WHERE id = $1 AND session_id = $2
+            RETURNING id
+            """,
+            node_id, session_id, title,
+        )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Node not found")
+    events.publish(session_id, "titled", {"node_id": str(node_id), "title": title})
+    return Response(status_code=204)
+
+
+@router.get("/{session_id}/attachments/{attachment_id}")
+async def get_attachment(
+    session_id: UUID, attachment_id: UUID, user_id: UUID = Depends(current_user)
+):
+    """The bytes of an image attached to a prompt.
+
+    The join on sessions is the authorisation: an id alone is not enough, the
+    session has to belong to the caller.
+    """
+    row = await get_pool().fetchrow(
+        """
+        SELECT a.media_type, a.bytes
+        FROM attachments a
+        JOIN sessions s ON s.id = a.session_id
+        WHERE a.id = $1 AND a.session_id = $2 AND s.user_id = $3
+        """,
+        attachment_id, session_id, user_id,
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return Response(
+        content=bytes(row["bytes"]),
+        media_type=row["media_type"],
+        # Attachments never change once written, so they can be cached hard.
+        headers={"Cache-Control": "private, max-age=31536000, immutable"},
+    )
 
 
 @router.patch("/{session_id}/positions", status_code=204)

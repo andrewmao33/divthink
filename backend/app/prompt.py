@@ -23,4 +23,9 @@ the same conversation. Keep them distinct and follow the instruction that comes 
 direction rather than covering the whole topic again.
 
 Answer the prompt itself. The user can see the earlier nodes on the canvas, so do not open by \
-summarizing the path that led here."""
+summarizing the path that led here.
+
+Keep replies short. Each one is a box on a canvas sitting beside its neighbours, so a long \
+answer crowds out everything around it. Prefer a few tight paragraphs over an exhaustive \
+treatment, and leave the follow-ups for the user to branch into rather than covering every \
+angle at once."""

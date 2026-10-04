@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Iterable
 from uuid import UUID
 
 from . import events
@@ -12,6 +12,7 @@ from .providers import claude, gemini
 from .providers.base import Chunk, Message, ProviderError
 from .providers.catalog import MODELS
 from .thinking import thought_headings
+from .titles import title_for
 
 log = logging.getLogger(__name__)
 
@@ -25,21 +26,51 @@ PROVIDERS: dict[str, Callable[[str, list[Message], str, str], AsyncIterator[Chun
 }
 
 _slots = asyncio.Semaphore(MAX_CONCURRENT)
-_tasks: set[asyncio.Task] = set()  # keeps running jobs from being garbage-collected
+# Reply node id -> its running job. Keeps the task from being garbage-collected,
+# and lets a delete stop a reply that is still being written.
+_jobs: dict[UUID, asyncio.Task] = {}
 
 
 def start_generation(
-    session_id: UUID, user_node_id: UUID, assistant_node_id: UUID, model: str, api_key: str
+    session_id: UUID,
+    user_node_id: UUID,
+    assistant_node_id: UUID,
+    model: str,
+    api_key: str,
+    web_search: bool = False,
 ) -> asyncio.Task:
     """Fill in `assistant_node_id` in the background with the user's key. Returns immediately."""
-    task = asyncio.create_task(_generate(session_id, user_node_id, assistant_node_id, model, api_key))
-    _tasks.add(task)
-    task.add_done_callback(_tasks.discard)
+    task = asyncio.create_task(
+        _generate(session_id, user_node_id, assistant_node_id, model, api_key, web_search)
+    )
+    _jobs[assistant_node_id] = task
+    task.add_done_callback(lambda _: _jobs.pop(assistant_node_id, None))
     return task
 
 
+def cancel_generation(node_ids: Iterable[UUID]) -> list[UUID]:
+    """Stop replies that are still being written. Returns the ones actually stopped.
+
+    Cancelling raises CancelledError inside the job: it is a BaseException, so the
+    job's `except Exception` doesn't swallow it, the semaphore slot is released on
+    the way out, and the `finally` still clears the reply's buffer.
+    """
+    stopped = []
+    for node_id in node_ids:
+        task = _jobs.get(node_id)
+        if task is not None and not task.done():
+            task.cancel()
+            stopped.append(node_id)
+    return stopped
+
+
 async def _generate(
-    session_id: UUID, user_node_id: UUID, assistant_node_id: UUID, model: str, api_key: str
+    session_id: UUID,
+    user_node_id: UUID,
+    assistant_node_id: UUID,
+    model: str,
+    api_key: str,
+    web_search: bool = False,
 ) -> None:
     node = str(assistant_node_id)
     async with _slots:  # wait for one of the MAX_CONCURRENT slots
@@ -55,13 +86,25 @@ async def _generate(
 
             stream = PROVIDERS[MODELS[model]]
             thoughts = answer = ""
+            usage = None
+            announced = False  # the one-off "thinking" event, for thoughts or a search
             headings_sent = 0
             started = time.monotonic()
             thinking_seconds = None  # request start -> first answer text, if it thought
-            async for chunk in stream(model, messages, api_key, BASE_PROMPT):
-                if chunk.kind == "thought":
-                    if not thoughts:
+            async for chunk in stream(model, messages, api_key, BASE_PROMPT, web_search):
+                if chunk.kind == "usage":
+                    usage = chunk.usage
+                elif chunk.kind == "search":
+                    # Reuses the thinking channel, so a search shows up in the UI
+                    # exactly like a thinking heading does.
+                    if not announced:
                         events.reply_thinking(session_id, node)
+                        announced = True
+                    events.reply_thought(session_id, node, f"Searching: {chunk.text}")
+                elif chunk.kind == "thought":
+                    if not announced:
+                        events.reply_thinking(session_id, node)
+                        announced = True
                     thoughts += chunk.text
                     # Only headings go to the browser, never the paragraphs.
                     headings = thought_headings(thoughts)
@@ -78,7 +121,7 @@ async def _generate(
             if not reply:
                 raise ProviderError("The model returned an empty reply. Try again.")
 
-            metadata = (
+            metadata: dict = (
                 {
                     "thoughts": thoughts,
                     "thought_headings": thought_headings(thoughts),
@@ -87,6 +130,13 @@ async def _generate(
                 if thoughts
                 else {}
             )
+            if usage is not None:
+                # What this reply actually cost, as the provider reported it.
+                metadata["usage"] = {
+                    "input_tokens": usage.input_tokens,
+                    "output_tokens": usage.output_tokens,
+                    "cache_read_tokens": usage.cache_read_tokens,
+                }
             await pool.execute(
                 # "- 'error'": during a --reload restart the new process's startup cleanup
                 # can mark this reply interrupted while this (old) process is still
@@ -98,11 +148,13 @@ async def _generate(
                 """,
                 assistant_node_id, reply, metadata,
             )
+            await _write_title(session_id, assistant_node_id, reply, model, api_key)
             events.publish(session_id, "done", {
                 "node_id": node,
                 "content": reply,
                 "thought_headings": metadata.get("thought_headings", []),
                 "thinking_seconds": metadata.get("thinking_seconds"),
+                "usage": metadata.get("usage"),
             })
         except Exception as e:
             if isinstance(e, ProviderError):
@@ -116,6 +168,27 @@ async def _generate(
             # Right after done/error is published (no await in between), or if the
             # job is cancelled. From here on the database has the final state.
             events.end_reply(session_id, node)
+
+
+async def _write_title(
+    session_id: UUID, node_id: UUID, reply: str, model: str, api_key: str
+) -> None:
+    """Name the reply so it stays readable when the canvas is zoomed out.
+
+    Runs after the reply is saved, and swallows its own failures: a missing title
+    is a cosmetic loss, not a reason to fail a reply that already succeeded.
+    """
+    title = await title_for(reply, model, api_key)
+    if not title:
+        return
+    try:
+        await get_pool().execute(
+            "UPDATE nodes SET metadata = metadata || $2::jsonb WHERE id = $1",
+            node_id, {"title": title},
+        )
+        events.publish(session_id, "titled", {"node_id": str(node_id), "title": title})
+    except Exception:
+        log.exception("could not save the title for %s", node_id)
 
 
 async def _mark_error(session_id: UUID, node_id: UUID, reason: str) -> None:

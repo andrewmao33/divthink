@@ -92,12 +92,33 @@ export function getSession(id: string): Promise<SessionGraph> {
   return request(`/sessions/${encodeURIComponent(id)}`)
 }
 
+// The one canvas readable without an account. No auth header: these routes are
+// open by design, and only serve sessions flagged is_public.
+export function getPublicSession(id: string): Promise<SessionGraph> {
+  // In development the demo canvas is rebuilt constantly and the response is
+  // cacheable, so a stale copy would hide every change. The parameter makes each
+  // load a different URL; production keeps the cache, which is the point of it.
+  const bust = import.meta.env.DEV ? `?t=${Date.now()}` : ''
+  return request(`/public/sessions/${encodeURIComponent(id)}${bust}`, {
+    cache: import.meta.env.DEV ? 'no-store' : 'default',
+  })
+}
+
+export function publicAttachmentUrl(sessionId: string, attachmentId: string): string {
+  return apiUrl(
+    `/public/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(attachmentId)}`,
+  )
+}
+
 export type GenerateRequest = {
   prompt: string
   parent_ids?: string[]
   model?: string
   // Branching from highlighted text in a reply.
   highlight?: { source_node_id: string; text: string }
+  // Files pasted, dropped or picked, base64 without the data: prefix.
+  attachments?: { media_type: string; data: string; filename: string }[]
+  web_search?: boolean
   // How tall each parent box is on screen, keyed by node id. A box is as tall as
   // its text, and only the browser knows that, so without this the server would
   // have to guess and would drop new boxes on top of long replies.
@@ -115,6 +136,14 @@ export function generate(sessionId: string, body: GenerateRequest): Promise<Gene
     method: 'POST',
     body: JSON.stringify(body),
   })
+}
+
+// Renames a box. An empty title falls back to whatever the model wrote.
+export function setTitle(sessionId: string, nodeId: string, title: string): Promise<void> {
+  return request(
+    `/sessions/${encodeURIComponent(sessionId)}/nodes/${encodeURIComponent(nodeId)}/title`,
+    { method: 'PATCH', body: JSON.stringify({ title }) },
+  )
 }
 
 // Deletes nodes plus descendants left with no parents. With dryRun, only reports
@@ -138,6 +167,14 @@ export function savePositions(
     method: 'PATCH',
     body: JSON.stringify({ positions }),
   })
+}
+
+// Images are fetched with the session token, so they can't go straight in an
+// <img src>. This returns the URL the fetch should use.
+export function attachmentUrl(sessionId: string, attachmentId: string): string {
+  return apiUrl(
+    `/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(attachmentId)}`,
+  )
 }
 
 export type ModelInfo = {

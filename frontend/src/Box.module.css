@@ -2,13 +2,14 @@
    reading measure. Narrower boxes turned long replies into very tall columns.
    Keep in step with SIBLING_GAP_X in backend/app/routes/generate.py. */
 .box {
+  position: relative; /* the zoomed-out title is laid over the body */
   width: 560px;
   padding: 16px 18px;
   border: 1px solid var(--color-border);
   border-radius: 0;
   background: var(--color-surface);
   font-family: var(--font-serif);
-  font-size: var(--text-sm);
+  font-size: 15px;
   line-height: 1.6;
   color: var(--color-text);
 }
@@ -64,6 +65,20 @@
   font-size: 0.9em;
 }
 
+/* Capped and scrollable: an unbounded box made a 1500px column, which forced
+   fitView to zoom the whole canvas out until nothing was readable. Handing the
+   wheel back to the canvas at the ends is done in Box.tsx. */
+.scroller {
+  max-height: 420px;
+  overflow-y: auto;
+  overscroll-behavior: contain; /* reaching the end doesn't scroll the page too */
+}
+
+/* Prompts are shorter than replies, so they cap lower. */
+.user .scroller {
+  max-height: 220px;
+}
+
 /* Reply text can be selected (React Flow turns selection off for boxes). */
 .reply {
   cursor: text;
@@ -104,4 +119,81 @@
 .handle {
   opacity: 0;
   pointer-events: none;
+}
+
+/* Screenshots sent with a prompt. */
+.images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.image {
+  max-width: 100%;
+  max-height: 240px;
+  border: 1px solid var(--color-border);
+}
+
+/* A PDF attached to a prompt: no thumbnail, so its name stands in. */
+.fileChip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Token counts under a finished reply. */
+.tokens {
+  margin: 10px 0 0;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+/* visibility, not display: the body still takes up its space, so collapsing
+   doesn't change the box's size. */
+.hiddenBody {
+  visibility: hidden;
+}
+
+/* Shown instead of the body once the canvas is zoomed out. Sized so it stays
+   legible as everything shrinks around it. */
+.title {
+  position: absolute;
+  inset: 16px 18px; /* matches .box padding */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  text-align: center;
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.titleInput {
+  position: absolute;
+  inset: 16px 18px;
+  width: auto;
+  text-align: center;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--color-text);
+  border-radius: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--color-text);
+  outline: none;
 }

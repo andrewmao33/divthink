@@ -15,8 +15,10 @@ export type StreamEvent =
         content: string
         thought_headings: string[]
         thinking_seconds: number | null
+        usage?: { input_tokens: number; output_tokens: number; cache_read_tokens: number } | null
       }
     }
+  | { type: 'titled'; data: { node_id: string; title: string } }
   | { type: 'error'; data: { node_id: string; message: string } }
 
 const EVENT_TYPES = new Set([
@@ -26,6 +28,7 @@ const EVENT_TYPES = new Set([
   'thought',
   'token',
   'done',
+  'titled',
   'error',
 ])
 

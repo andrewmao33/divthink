@@ -4,6 +4,9 @@ import Canvas from './Canvas'
 import Landing from './Landing'
 import { resetCanvas } from './store'
 
+// A public canvas, readable with no account: divthink.com/?demo=<session id>
+const demoId = new URLSearchParams(window.location.search).get('demo')
+
 function App() {
   // undefined: still checking for an existing sign-in.
   const [session, setSession] = useState<Session | null | undefined>(authEnabled ? undefined : null)
@@ -18,6 +21,7 @@ function App() {
     return () => data.subscription.unsubscribe()
   }, [])
 
+  if (demoId) return <Canvas demoId={demoId} /> // public canvas, no sign-in
   if (!authEnabled) return <Canvas /> // local development without sign-in
   if (session === undefined) return null
   return session ? <Canvas /> : <Landing />

@@ -52,3 +52,60 @@
   color: var(--color-text-muted);
   pointer-events: none; /* never block panning the canvas */
 }
+
+/* Top right: puts every box back into tidy rows. */
+.reformat {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 15;
+  padding: 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  background: var(--color-surface);
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.reformat:hover {
+  border-color: var(--color-text);
+  background: var(--hover-tint);
+}
+
+/* Replaces the chat box on the public canvas. */
+.demoBar {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: min(620px, calc(100% - 32px));
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: var(--text-sm);
+  transform: translateX(-50%);
+}
+
+.demoBar span {
+  flex: 1;
+}
+
+.demoButton {
+  flex: none;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-accent);
+  background: var(--color-accent);
+  font-size: var(--text-sm);
+  color: var(--color-on-accent);
+  text-decoration: none;
+}
+
+.demoButton:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}

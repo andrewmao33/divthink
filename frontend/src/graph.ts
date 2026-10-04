@@ -120,14 +120,22 @@ export function applyEvent(current: Graph, event: StreamEvent, now = Date.now())
     }
 
     case 'done': {
-      const { node_id, content, thought_headings, thinking_seconds } = event.data
+      const { node_id, content, thought_headings, thinking_seconds, usage } = event.data
       return update(current, node_id, false, ({ node }) => ({
         node: {
           ...node,
           status: 'complete',
           content,
-          metadata: { ...node.metadata, thought_headings, thinking_seconds },
+          metadata: { ...node.metadata, thought_headings, thinking_seconds, usage },
         },
+      }))
+    }
+
+    case 'titled': {
+      const { node_id, title } = event.data
+      return update(current, node_id, false, ({ node, live }) => ({
+        node: { ...node, metadata: { ...node.metadata, title: title || undefined } },
+        live,
       }))
     }
 

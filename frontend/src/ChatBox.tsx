@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import styles from './ChatBox.module.css'
 import { isEditing } from './dom'
 import type { BoxNode } from './graph'
-import { useCanvasStore } from './store'
+import { ALLOWED_TYPES, useCanvasStore } from './store'
 
 const MAX_INPUT_HEIGHT = 200 // px; taller prompts scroll inside the box
 
@@ -13,6 +13,7 @@ function ChatBox() {
   const selected = useCanvasStore(useShallow((s) => s.nodes.filter((box) => box.selected)))
   const {
     highlight,
+    images,
     sending,
     notice,
     pendingDelete,
@@ -25,9 +26,12 @@ function ChatBox() {
     cancelDelete,
     setModel,
     openKeys,
+    addImages,
+    removeImage,
   } = useCanvasStore(
     useShallow((s) => ({
       highlight: s.highlight,
+      images: s.images,
       sending: s.sending,
       notice: s.notice,
       pendingDelete: s.pendingDelete,
@@ -40,10 +44,14 @@ function ChatBox() {
       cancelDelete: s.cancelDelete,
       setModel: s.setModel,
       openKeys: s.openKeys,
+      addImages: s.addImages,
+      removeImage: s.removeImage,
     })),
   )
   const [text, setText] = useState('')
+  const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
   const context = describeSelection(selected, highlight !== null)
   // Signed in but no API key saved yet: nothing can be sent.
   const needsKey = models.length > 0 && !models.some((m) => m.available)
@@ -76,6 +84,22 @@ function ChatBox() {
     if (!prompt || sending || context.blocked || needsKey) return
     // Keep the text if sending fails, so nothing typed is lost.
     if (await sendPrompt(prompt)) setText('')
+  }
+
+  // Screenshots arrive either pasted or dropped; both end up here.
+  function onPaste(e: React.ClipboardEvent) {
+    const files = Array.from(e.clipboardData.files)
+    if (files.length > 0) {
+      e.preventDefault()
+      void addImages(files)
+    }
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragging(false)
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length > 0) void addImages(files)
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -133,7 +157,38 @@ function ChatBox() {
         )
       )}
 
-      <div className={styles.box}>
+      <div
+        className={`${styles.box} ${dragging ? styles.dropping : ''}`}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragging(true)
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+      >
+        {images.length > 0 && (
+          <div className={styles.thumbs}>
+            {images.map((image) => (
+              <div key={image.id} className={image.preview ? styles.thumb : styles.fileChip}>
+                {image.preview ? (
+                  <img src={image.preview} alt={image.name} />
+                ) : (
+                  <span className={styles.fileName} title={image.name}>
+                    {image.name}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className={styles.thumbRemove}
+                  onClick={() => removeImage(image.id)}
+                  aria-label={`Remove ${image.name}`}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         {highlight && (
           <div className={styles.quote}>
             <p className={styles.quoteText}>{highlight.text}</p>
@@ -143,12 +198,35 @@ function ChatBox() {
           </div>
         )}
         <div className={styles.row}>
+          <input
+            ref={fileRef}
+            type="file"
+            className={styles.fileInput}
+            accept={ALLOWED_TYPES.join(',')}
+            multiple
+            onChange={(e) => {
+              void addImages(Array.from(e.target.files ?? []))
+              e.target.value = '' // lets the same file be picked again
+            }}
+          />
+          <button
+            type="button"
+            className={styles.attach}
+            onClick={() => fileRef.current?.click()}
+            title="Attach images or PDFs"
+            aria-label="Attach images or PDFs"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M9.5 4 5 8.5a2.1 2.1 0 0 0 3 3l4.5-4.5a3.5 3.5 0 0 0-5-5L3 6.5a5 5 0 0 0 7 7L13.5 10" />
+            </svg>
+          </button>
           <textarea
             ref={inputRef}
             className={styles.input}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={onKeyDown}
+            onPaste={onPaste}
             rows={1}
             placeholder={context.placeholder}
             aria-label="Prompt"

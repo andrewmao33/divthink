@@ -23,6 +23,9 @@ CREATE TABLE sessions (
   user_id       uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   title         text NOT NULL DEFAULT '',
   default_model text,
+  -- Readable by anyone, through /public/sessions/{id}: the demo canvas on the
+  -- landing page. Off unless set by hand.
+  is_public     boolean NOT NULL DEFAULT false,
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()  -- set by the app on change
 );
@@ -62,6 +65,25 @@ CREATE TABLE edges (
   FOREIGN KEY (session_id, child_id)  REFERENCES nodes (session_id, id) ON DELETE CASCADE
 );
 
+-- Images attached to a prompt. Kept as bytes rather than in object storage:
+-- they are small, and this way they are covered by the same backups and the
+-- same cascade as the node they belong to.
+CREATE TABLE attachments (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id uuid NOT NULL,
+  node_id    uuid NOT NULL,
+  media_type text NOT NULL CHECK (media_type IN (
+    'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf'
+  )),
+  filename   text,  -- shown on the box; PDFs have no thumbnail to show instead
+  bytes      bytea NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+
+  FOREIGN KEY (session_id, node_id) REFERENCES nodes (session_id, id) ON DELETE CASCADE
+);
+
+CREATE INDEX attachments_node_id_idx ON attachments (node_id);
+
 -- Ancestor walk: find a node's parents by child_id.
 -- (Lookups by parent_id use the UNIQUE (parent_id, child_id) index.)
 CREATE INDEX edges_child_id_idx ON edges (child_id);
@@ -75,3 +97,4 @@ ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE nodes    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE edges    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE attachments ENABLE ROW LEVEL SECURITY;

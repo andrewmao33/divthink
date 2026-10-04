@@ -9,7 +9,7 @@
 }
 
 .box {
-  padding: 8px 8px 8px 14px;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: 0;
   background: var(--color-surface);
@@ -43,6 +43,10 @@
   color: var(--color-text-muted);
 }
 
+.send:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
 .send {
   flex: none;
   padding: 6px 12px;
@@ -51,7 +55,7 @@
   background: var(--color-accent);
   font: inherit;
   font-size: var(--text-sm);
-  color: #fff;
+  color: var(--color-on-accent);
   cursor: pointer;
 }
 
@@ -103,7 +107,7 @@
 
 .danger {
   background: var(--color-error);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .textButton {
@@ -159,4 +163,95 @@
   font-size: var(--text-sm);
   text-align: center;
   color: var(--color-error);
+}
+
+/* Screenshots waiting to be sent. */
+.thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.thumb {
+  position: relative;
+  width: 64px;
+  height: 64px;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--color-border);
+  object-fit: cover;
+}
+
+.thumbRemove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  background: var(--color-surface);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+/* While a file is held over the chat box. */
+.dropping {
+  border-color: var(--color-text);
+}
+
+
+/* Hidden: the paperclip button opens it. */
+.fileInput {
+  display: none;
+}
+
+.attach {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.attach:hover,
+.attach:focus-visible {
+  outline: none;
+  border-color: var(--color-text);
+  background: var(--hover-tint);
+  color: var(--color-text);
+}
+
+/* A PDF has no thumbnail, so it shows its name. */
+.fileChip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  max-width: 180px;
+  height: 64px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.fileName {
+  overflow: hidden;
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

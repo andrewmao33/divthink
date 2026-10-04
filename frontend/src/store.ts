@@ -5,20 +5,33 @@ import {
   createSession,
   deleteNodes,
   generate,
+  getPublicSession,
   getSession,
   listModels,
   listSessions,
   savePositions as savePositionsRequest,
+  setTitle as setTitleRequest,
   type ModelInfo,
   type Session,
 } from './api'
 import { addMissing, applyEvent, fromServer, removeNodes, selectOnly, type BoxNode } from './graph'
+import { tidyPositions } from './tidy'
 import { readStream, type StreamEvent } from './stream'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 // Text highlighted in a reply that the next prompt branches from.
 export type Highlight = { sourceNodeId: string; text: string }
+
+// A file waiting to be sent. `preview` is an object URL, only for images —
+// a PDF shows its name instead.
+export type PendingFile = {
+  id: string
+  mediaType: string
+  data: string
+  preview: string | null
+  name: string
+}
 
 // A delete waiting for "Delete N boxes?" confirmation.
 type PendingDelete = { nodeIds: string[]; count: number }
@@ -32,6 +45,7 @@ type CanvasState = {
   // Live updates: 'reconnecting' after the stream drops, until it's back.
   connection: 'live' | 'reconnecting'
   highlight: Highlight | null
+  images: PendingFile[]
   models: ModelInfo[]
   model: string | null // chosen for the next prompt; null until /models loads
   sending: boolean
@@ -40,6 +54,11 @@ type CanvasState = {
   pendingDelete: PendingDelete | null
   // Boxes the view should move to, set after sending a prompt.
   focusNodeIds: string[] | null
+  // Bumped to send the view back to the canvas origin, after a reformat.
+  homeView: number
+  // The public demo: everything that writes is refused, and there is no stream.
+  readOnly: boolean
+  loadPublicSession: (id: string) => Promise<void>
   keysOpen: boolean // the API keys dialog
   openKeys: () => void
   closeKeys: () => void
@@ -55,13 +74,32 @@ type CanvasState = {
   confirmDelete: () => Promise<void>
   cancelDelete: () => void
   savePositions: (boxes: BoxNode[]) => void
+  // Lays every box back out into rows and saves where they landed.
+  reformat: () => void
+  renameNode: (nodeId: string, title: string) => void
   clearSelection: () => void
   startBranch: (sourceNodeId: string, text: string) => void
   clearHighlight: () => void
+  addImages: (files: File[]) => Promise<void>
+  removeImage: (id: string) => void
   onNodesChange: (changes: NodeChange<BoxNode>[]) => void
 }
 
 const MODEL_STORAGE_KEY = 'divthink.model'
+const MAX_IMAGES = 8
+export const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+export const ALLOWED_TYPES = [...ALLOWED_IMAGE_TYPES, 'application/pdf']
+
+
+// The API takes raw base64; a data URL carries a prefix that has to come off.
+function toBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '')
+    reader.onerror = () => reject(new Error("That image couldn't be read."))
+    reader.readAsDataURL(file)
+  })
+}
 
 export const useCanvasStore = create<CanvasState>()((set, get) => ({
   status: 'idle',
@@ -71,16 +109,30 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   edges: [],
   connection: 'live',
   highlight: null,
+  images: [],
   models: [],
   model: null,
   sending: false,
   notice: null,
   pendingDelete: null,
   focusNodeIds: null,
+  homeView: 0,
+  readOnly: false,
   keysOpen: false,
 
   openKeys: () => set({ keysOpen: true }),
   closeKeys: () => set({ keysOpen: false }),
+
+  loadPublicSession: async (id) => {
+    set({ status: 'loading', error: null, nodes: [], edges: [], readOnly: true })
+    try {
+      const graph = await getPublicSession(id)
+      const { nodes: _nodes, edges: _edges, ...session } = graph
+      set((s) => ({ ...fromServer(graph, s.nodes), session, status: 'ready', connection: 'live' }))
+    } catch {
+      set({ status: 'error', error: "That canvas isn't available." })
+    }
+  },
 
   loadSession: async (id) => {
     // React StrictMode runs effects twice in development; load only once.
@@ -136,19 +188,30 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   },
 
   sendPrompt: async (prompt) => {
-    const { session, sending, nodes, highlight, model } = get()
-    if (!session || sending) return false
+    const { session, sending, nodes, highlight, model, images, readOnly } = get()
+    if (!session || sending || readOnly) return false
     const parentIds = nodes.filter((box) => box.selected).map((box) => box.id)
     set({ sending: true, notice: null, pendingDelete: null })
     try {
       const created = await generate(session.id, {
         prompt,
         parent_ids: parentIds,
-        parent_heights: measuredHeights(nodes, [...parentIds, highlight?.sourceNodeId]),
+        // Every box, not just the parents: the server also uses these to find a
+        // spot where the new boxes don't land on anything.
+        parent_heights: measuredHeights(nodes),
         ...(model && { model }),
         ...(highlight && {
           highlight: { source_node_id: highlight.sourceNodeId, text: highlight.text },
         }),
+        ...(images.length > 0 && {
+          attachments: images.map((i) => ({
+            media_type: i.mediaType,
+            data: i.data,
+            filename: i.name,
+          })),
+        }),
+        // Always offered; the model only searches when the question needs it.
+        web_search: true,
       })
       // The stream normally delivers the new boxes (node_created). If they haven't
       // arrived yet, fetch them so they show up regardless; duplicates are skipped.
@@ -161,6 +224,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
         nodes: selectOnly(s.nodes, created.assistant_node_id),
         session: s.session && { ...s.session, title: created.session_title },
         highlight: null,
+        images: [],
         sending: false,
         focusNodeIds: [created.user_node_id, created.assistant_node_id],
       }))
@@ -177,8 +241,8 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   },
 
   deleteNodeIds: async (nodeIds) => {
-    const { session, pendingDelete } = get()
-    if (!session || nodeIds.length === 0 || pendingDelete) return
+    const { session, pendingDelete, readOnly } = get()
+    if (!session || nodeIds.length === 0 || pendingDelete || readOnly) return
     set({ notice: null })
     try {
       // Ask the server what would go. Confirm only when it's more than what was asked for.
@@ -203,12 +267,41 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   cancelDelete: () => set({ pendingDelete: null }),
 
   savePositions: (boxes) => {
-    const { session } = get()
-    if (!session || boxes.length === 0) return
+    const { session, readOnly } = get()
+    if (!session || boxes.length === 0 || readOnly) return
     const positions = boxes.map((box) => ({ id: box.id, x: box.position.x, y: box.position.y }))
     savePositionsRequest(session.id, positions).catch(() =>
       set({ notice: "Couldn't save where the boxes were moved. They'll jump back on refresh." }),
     )
+  },
+
+  reformat: () => {
+    const { nodes, edges, session } = get()
+    if (!session || nodes.length === 0) return
+    const placed = new Map(tidyPositions(nodes, edges).map((p) => [p.id, p]))
+    const moved = nodes.map((box) => {
+      const next = placed.get(box.id)
+      return next ? { ...box, position: { x: next.x, y: next.y } } : box
+    })
+    set({ nodes: moved, homeView: Date.now() })
+    savePositionsRequest(
+      session.id,
+      moved.map((b) => ({ id: b.id, x: b.position.x, y: b.position.y })),
+    ).catch(() => set({ notice: "Couldn't save the new layout." }))
+  },
+
+  renameNode: (nodeId, title) => {
+    const { session, readOnly } = get()
+    if (!session || readOnly) return
+    // Applied locally first; the stream echoes it back for other tabs.
+    set((s) => ({
+      nodes: s.nodes.map((box) =>
+        box.id === nodeId
+          ? { ...box, data: { ...box.data, node: { ...box.data.node, metadata: { ...box.data.node.metadata, title: title || undefined } } } }
+          : box,
+      ),
+    }))
+    setTitleRequest(session.id, nodeId, title).catch(() => set({ notice: "Couldn't save that title." }))
   },
 
   clearSelection: () => set((s) => ({ nodes: selectOnly(s.nodes, null) })),
@@ -218,6 +311,32 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
     set((s) => ({ highlight: { sourceNodeId, text }, nodes: selectOnly(s.nodes, sourceNodeId), notice: null })),
 
   clearHighlight: () => set({ highlight: null }),
+
+  addImages: async (files) => {
+    const accepted = files.filter((f) => ALLOWED_TYPES.includes(f.type))
+    if (accepted.length === 0) {
+      if (files.length > 0) set({ notice: 'Only images and PDFs can be attached.' })
+      return
+    }
+    const read = await Promise.all(
+      accepted.map(async (file) => ({
+        id: crypto.randomUUID(),
+        mediaType: file.type,
+        data: await toBase64(file),
+        preview: file.type === 'application/pdf' ? null : URL.createObjectURL(file),
+        name: file.name || 'screenshot',
+      })),
+    )
+    set((s) => ({ images: [...s.images, ...read].slice(0, MAX_IMAGES), notice: null }))
+  },
+
+  removeImage: (id) =>
+    set((s) => {
+      const going = s.images.find((i) => i.id === id)
+      if (going?.preview) URL.revokeObjectURL(going.preview) // the object URL leaks otherwise
+      return { images: s.images.filter((i) => i.id !== id) }
+    }),
+
 
   // Dragging and selecting update boxes locally; positions are saved on drag stop.
   onNodesChange: (changes) => set({ nodes: applyNodeChanges(changes, get().nodes) }),
@@ -240,16 +359,15 @@ function withoutNodes(s: CanvasState, nodeIds: string[]) {
   return { ...removeNodes(s, nodeIds), highlight: quoteGone ? null : s.highlight }
 }
 
-// How tall the given boxes are on screen. React Flow measures them after render;
-// a box that hasn't been measured yet is left out, and the server falls back to
-// its own estimate. Boxes are as tall as their text, so without this the server
-// would place new boxes on top of long replies.
-function measuredHeights(nodes: BoxNode[], ids: (string | undefined)[]): Record<string, number> {
-  const wanted = new Set(ids.filter((id): id is string => Boolean(id)))
+// How tall every box is on screen. React Flow measures them after render; one
+// that hasn't been measured yet is left out and the server falls back to its own
+// estimate. Boxes are as tall as their text, so without this the server would
+// both place new boxes on top of long replies and fail to see what is in the way.
+function measuredHeights(nodes: BoxNode[]): Record<string, number> {
   const heights: Record<string, number> = {}
   for (const box of nodes) {
     const height = box.measured?.height
-    if (wanted.has(box.id) && height) heights[box.id] = Math.round(height)
+    if (height) heights[box.id] = Math.round(height)
   }
   return heights
 }
@@ -273,12 +391,15 @@ export function resetCanvas() {
     edges: [],
     connection: 'live',
     highlight: null,
+    images: [],
     models: [],
     model: null,
     sending: false,
     notice: null,
     pendingDelete: null,
     focusNodeIds: null,
+    homeView: 0,
+    readOnly: false,
     keysOpen: false,
   })
 }

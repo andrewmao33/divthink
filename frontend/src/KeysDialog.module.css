@@ -94,7 +94,7 @@
 .primary {
   border: 0;
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .secondary {
@@ -131,4 +131,13 @@
   display: flex;
   justify-content: flex-end;
   margin-top: 8px;
+}
+
+
+/* Keyboard focus. A modal is where this matters most — there is nowhere else to
+   look, and the browser default ring doesn't match anything else here. */
+.dialog button:focus-visible,
+.dialog input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
