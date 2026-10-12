@@ -277,6 +277,8 @@ function Sidebar({ children }: { children: React.ReactNode }) {
                   className={styles.footerItem}
                   onClick={() => {
                     resetCanvas()
+                    // Back to the plain address: the canvas in it isn't theirs to see any more.
+                    window.history.replaceState(null, '', '/')
                     void signOut()
                   }}
                 >

@@ -32,6 +32,7 @@ import Sidebar from './Sidebar'
 import barStyles from './Sidebar.module.css'
 import { useCanvasStore } from './store'
 
+const CANVAS_PATH = '/canvas/' // followed by the open canvas's id
 const PANEL_STORAGE_KEY = 'divthink.panel'
 const PANEL_DEFAULT = 420
 const PANEL_GUTTER = 24 // the panel's margin plus the gap to its right
@@ -137,16 +138,14 @@ function Canvas({ demoId, embedded = false }: Props) {
       void loadPublicSession(demoId)
       return
     }
-    void loadSession(new URLSearchParams(window.location.search).get('session'))
+    void loadSession(canvasIdInAddress())
     void loadModels()
   }, [embedded, demoId, loadPublicSession, loadSession, loadModels, loadDemo])
 
   // Keep the open canvas in the URL, so refreshing reopens it.
   useEffect(() => {
     if (!session || readOnly || embedded) return
-    const url = new URL(window.location.href)
-    url.searchParams.set('session', session.id)
-    window.history.replaceState(null, '', url)
+    window.history.replaceState(null, '', `${CANVAS_PATH}${session.id}`)
   }, [session, readOnly, embedded])
 
   // Escape backs out of a delete waiting to be confirmed, then of a merge being
@@ -593,6 +592,17 @@ function ZoomButtons() {
       </button>
     </div>
   )
+}
+
+// Which canvas the address names: divthink.com/canvas/<id>. Links from before
+// that, of the form ?session=<id>, still open the canvas they point to.
+function canvasIdInAddress(): string | null {
+  const { pathname, search } = window.location
+  if (pathname.startsWith(CANVAS_PATH)) {
+    const id = pathname.slice(CANVAS_PATH.length).split('/')[0]
+    if (id) return decodeURIComponent(id)
+  }
+  return new URLSearchParams(search).get('session')
 }
 
 function readPanel(): { width: number; collapsed: boolean } {

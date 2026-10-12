@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <!-- A plain image as well: search engines and phones want a square picture
+         of a known size, and not all of them read the SVG. -->
+    <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -41,7 +45,7 @@
     <title>Divthink</title>
     <meta
       name="description"
-      content="DivThink is a canvas for conversations that branch instead of scrolling. Branch from any reply, follow several threads side by side, then merge them back."
+      content="Divthink is a canvas for AI conversations that branch instead of scrolling. Branch from any reply, keep threads side by side, and merge them back. Works with Claude and Gemini."
     />
     <link rel="canonical" href="https://divthink.com/" />
 
@@ -50,12 +54,24 @@
          doesn't. -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://divthink.com/" />
-    <meta property="og:title" content="DivThink" />
+    <meta property="og:site_name" content="Divthink" />
+    <meta property="og:title" content="Divthink: conversations that branch instead of scrolling" />
     <meta
       property="og:description"
       content="A canvas for conversations that branch instead of scrolling."
     />
     <meta name="twitter:card" content="summary" />
+
+    <!-- Tells search engines what the site is called, so results show
+         "Divthink" above the link instead of the bare address. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Divthink",
+        "url": "https://divthink.com/"
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
