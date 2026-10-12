@@ -1,0 +1,260 @@
+/* The frame every public page shares: dark ground, the menu top-left, the
+   sign-in link top-right, the footer at the bottom. Dark, unlike the canvas: these colours are the site's
+   own and deliberately don't touch the shared tokens in index.css. */
+
+.page {
+  --bg: #13130b; /* warm near-black: brown-tinted rather than blue */
+  --text: #edecec;
+  --text-muted: #8f8d86;
+  --text-soft: #bab8b1; /* between the two: the corner link */
+  --error: #f08a8a;
+  --accent: #d98538; /* burnt orange: the one colour on the page */
+  --rule: #ffffff14; /* hairlines: white at low alpha, so they tint the ground */
+
+  position: relative;
+  min-height: 100%;
+  display: flex;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+/* Selected text, anywhere on these pages: white on a saturated electric blue. */
+.page ::selection {
+  background: #3a00ff;
+  color: #fff;
+}
+
+/* Film grain over the flat background. Generated noise, so no image file. Two
+   layers, each a colour matrix that turns noise into specks with the contrast
+   stretched, so grains stand out against untouched background instead of
+   forming an even haze:
+   - white grain everywhere (its alpha is halved in the matrix, because the
+     element's opacity below is set for the orange layer);
+   - burnt-orange specks from a different noise seed with a higher cut-off, so
+     they are far fewer. A different tile size keeps the two from repeating
+     together. */
+.page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.85 0 0 0 0 0.52 0 0 0 0 0.22 6 0 0 0 -3.3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 2 0 0 0 -0.85'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.06;
+  pointer-events: none;
+}
+
+/* One centred frame in three columns: the menu down the left, the sign-in link
+   down the right, the page's own content in the space between. Both side
+   columns stay put while the content scrolls past. */
+.frame {
+  position: relative;
+  flex: 1;
+  display: flex;
+  width: 100%;
+  max-width: 1458px;
+  margin-inline: auto;
+  padding-inline: 42px;
+}
+
+/* ---- Menu ------------------------------------------------------------------ */
+
+/* Sticky, so it stays in view however far a long page scrolls. Its fixed width
+   is also what sets where the content column starts. The logo sits above the
+   list. The list's first item sits level with the middle of the first line
+   of the home page's headline (see .hero and .headline in Landing.module.css,
+   and move this with them). */
+.menu {
+  position: sticky;
+  top: 128px; /* the same as its margin, so it never moves as the page scrolls */
+  align-self: flex-start;
+  flex: none;
+  width: 184px;
+  margin: 128px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* A full screen at least, so the footer always starts below the first view
+   however little a page has on it. */
+.main {
+  min-height: 100vh;
+}
+
+/* ---- Footer ---------------------------------------------------------------- */
+
+.footer {
+  border-top: 1px solid var(--rule);
+}
+
+.footerLinks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-8);
+  padding: 88px 0 64px;
+}
+
+.footerLinks ul {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.footerLinks a {
+  font-size: var(--text-sm);
+  line-height: 20px;
+  color: var(--text-soft);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.footerLinks a:hover {
+  color: var(--text);
+}
+
+/* The arrow that marks a link as leaving the site. */
+.external {
+  margin-left: var(--space-2);
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
+.copyright {
+  margin: 0;
+  padding: 40px 0 64px;
+  border-top: 1px solid var(--rule);
+  font-size: 0.71875rem;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+/* The drawing has its own margin inside the file, so the head itself comes out
+   around 16px tall: level with the first link's 20px line. */
+.mark {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.menuList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.menuLink {
+  font-size: var(--text-sm);
+  line-height: 20px;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.menuLink:hover,
+.menuLink[aria-current='page'] {
+  color: var(--text);
+}
+
+/* The sign-in link: a column of its own to the right of the content, sticky
+   like the menu, so it is always in reach and nothing scrolls underneath it.
+   The width is fixed so the content doesn't shift when its label changes. */
+.corner {
+  position: sticky;
+  top: 18px;
+  align-self: flex-start;
+  flex: none;
+  width: 84px;
+  margin: 18px 0 0 var(--space-8);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.start {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--text-sm);
+  line-height: 20px;
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.start:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.start:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.menuLink:focus-visible,
+.footerLinks a:focus-visible,
+.start:focus-visible {
+  outline: 1px solid var(--text);
+  outline-offset: 4px;
+}
+
+.error {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  color: var(--error);
+}
+
+/* Narrow screens: no room for the menu beside the content, so it goes on top
+   and scrolls away with the page. */
+@media (max-width: 1000px) {
+  .frame {
+    flex-direction: column;
+    padding-inline: var(--space-6);
+  }
+
+  .menu {
+    position: static;
+    width: auto;
+    margin-top: 52px;
+  }
+
+  .content {
+    flex: none;
+    padding-right: 0;
+  }
+
+  .main {
+    min-height: 60vh;
+  }
+
+  .footerLinks {
+    padding: 56px 0 48px;
+  }
+
+  /* No room for a third column: back to the top-right corner of the page. */
+  .corner {
+    position: absolute;
+    top: 18px;
+    right: var(--space-6);
+    width: auto;
+    margin: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .footerLinks {
+    grid-template-columns: 1fr;
+  }
+}

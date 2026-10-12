@@ -31,6 +31,9 @@ async def assemble_context(
 
     A prompt with several parents is a merge, and gets a different shape: the
     history the branches share, then each branch on its own, then the prompt.
+    Everything that continues from a merge keeps that shape and adds its own
+    turns after it. Nothing above a merge can change once it exists, so the
+    merge's context comes out the same on every later request.
     """
     rows = await conn.fetch(_ANCESTORS_SQL, node_ids, session_id)
     if not rows:
@@ -64,11 +67,37 @@ async def assemble_context(
 
     targets = [node_id for node_id in node_ids if node_id in nodes]
     if len(targets) == 1:
-        # Oldest branch first, so the order doesn't shift between requests.
-        merged = sorted(parents_of[targets[0]], key=lambda i: (nodes[i]["created_at"], str(i)))
-        if len(merged) > 1:
-            return _merged(nodes, edges, targets[0], merged, parents_of)
+        merge_id, after = _nearest_merge(targets[0], parents_of)
+        if merge_id is not None:
+            # Oldest branch first, so the order doesn't shift between requests.
+            heads = sorted(parents_of[merge_id], key=lambda i: (nodes[i]["created_at"], str(i)))
+            messages = _merged(nodes, edges, merge_id, heads, parents_of)
+            for message in _to_messages([nodes[node_id] for node_id in after]):
+                _append(messages, message.role, message.content, message.attachments)
+            return messages
     return _to_messages(_oldest_first(nodes, edges))
+
+
+def _nearest_merge(
+    start: UUID, parents_of: dict[UUID, list[UUID]]
+) -> tuple[UUID | None, list[UUID]]:
+    """Walks up from `start` along its single line of parents to the first merge.
+
+    Returns that merge and the nodes that came after it, oldest first; or None
+    when the line reaches the top of a thread without meeting one.
+    """
+    after: list[UUID] = []
+    current = start
+    seen = {start}
+    while True:
+        parents = parents_of.get(current, [])
+        if len(parents) > 1:
+            return current, list(reversed(after))
+        if not parents or parents[0] in seen:
+            return None, []
+        after.append(current)
+        current = parents[0]
+        seen.add(current)
 
 
 def _merged(

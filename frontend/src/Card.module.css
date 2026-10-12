@@ -1,0 +1,162 @@
+/* One exchange on the canvas. It fills the box React Flow gives it: Canvas.tsx
+   sets the width (CARD_WIDTH in layout.ts until the card is resized) and, once
+   resized, the height. With the caps on the prompt and the reply below, a full
+   card comes out a little wider than it is tall. */
+.card {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius);
+  overflow: hidden; /* keeps the scrolling reply inside the rounded corners */
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--color-text);
+  cursor: pointer;
+  transition:
+    opacity 0.15s,
+    border-color 0.15s;
+}
+
+/* Everything off the active path steps back, and comes forward again under the
+   pointer so it can still be read where it is. */
+.rest {
+  opacity: 0.5;
+}
+
+.rest:hover {
+  opacity: 1;
+}
+
+/* On the way to the active card: a brighter border, short of the active one's. */
+.path {
+  border-color: #ffffff59;
+}
+
+/* The inset shadow thickens the border without changing the card's size, which
+   would otherwise nudge the layout every time a different card is picked. */
+.active {
+  border-color: var(--color-accent);
+  background: var(--color-card-active);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+/* Picked for the merge being drafted. */
+.picked,
+.picked.rest {
+  border-style: dashed;
+  border-color: var(--color-accent);
+  opacity: 1;
+}
+
+/* Above the first card of each thread. Outside the card, so it adds nothing to
+   the size the layout works with. */
+.thread {
+  position: absolute;
+  bottom: 100%;
+  left: 2px;
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+/* The part of a card to pick it up by: the reply's text is for selecting. */
+.prompt {
+  flex: none;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  cursor: grab;
+}
+
+.prompt:active {
+  cursor: grabbing;
+}
+
+/* Three lines at most: a pasted page as a prompt shouldn't push its own reply
+   off the card. The panel shows it in full. */
+.promptText {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--color-text-soft);
+}
+
+.you {
+  color: var(--color-text-muted);
+}
+
+/* The passage a branch was taken from, above its prompt. */
+.quote {
+  display: -webkit-box;
+  margin: 0 0 var(--space-1);
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.files {
+  margin: var(--space-1) 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+}
+
+/* Marks a card nothing continues from yet: a place to keep going. */
+.leaf {
+  border-radius: 5px;
+  float: right;
+  margin: 1px 0 0 var(--space-2);
+  padding: 0 6px;
+  border: 1px solid var(--color-border-strong);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+/* The reply in full; a long one scrolls inside the card, so no card grows into
+   a tall column. */
+.reply {
+  flex: 1;
+  min-height: 0;
+  max-height: 250px;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  cursor: text;
+  user-select: text;
+}
+
+/* A card given its own height: the reply takes whatever room that leaves. */
+.sized .reply {
+  max-height: none;
+}
+
+.handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Inside the landing page, reaching the end of a reply hands the scroll on to
+   the page instead of stopping it dead. */
+:global([data-embedded]) .reply {
+  overscroll-behavior: auto;
+}
+
+/* Dimming a card lets the demo's lighter ground show through and washes its
+   text out, so there the cards off the path step back less. */
+:global([data-embedded]) .rest {
+  opacity: 0.8;
+}

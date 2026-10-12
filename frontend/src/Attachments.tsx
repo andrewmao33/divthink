@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { attachmentUrl, authHeaders, publicAttachmentUrl } from './api'
 import { useCanvasStore } from './store'
-import styles from './Box.module.css'
+import styles from './Attachments.module.css'
 
 export type NodeAttachment = { id: string; media_type: string; filename: string }
 

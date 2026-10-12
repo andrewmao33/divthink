@@ -20,7 +20,7 @@ from ..layout import (
     reserved_block,
     prompt_position,
 )
-from ..providers.catalog import DEFAULT_MODEL, LABELS, MODELS, PROVIDER_LABELS
+from ..providers.catalog import CONTEXT_TOKENS, DEFAULT_MODEL, LABELS, MODELS, PROVIDER_LABELS
 
 router = APIRouter(prefix="/sessions", tags=["generate"])
 log = logging.getLogger(__name__)
@@ -31,6 +31,19 @@ MAX_ATTACHMENTS = 8
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 MAX_PDF_BYTES = 16 * 1024 * 1024  # PDFs are bigger; Anthropic's request cap is 32 MB
 MAX_ATTACHMENTS_BYTES = 24 * 1024 * 1024  # all of them together
+# Text is counted in characters and turned into tokens at a rate that errs high,
+# and only most of the window is offered, leaving room for the reply itself.
+CHARS_PER_TOKEN = 3
+CONTEXT_SHARE = 0.8
+
+_HISTORY_CHARS_SQL = """
+WITH RECURSIVE ancestors AS (
+  SELECT id FROM nodes WHERE id = ANY($1::uuid[]) AND session_id = $2
+  UNION
+  SELECT e.parent_id FROM edges e JOIN ancestors a ON e.child_id = a.id
+)
+SELECT coalesce(sum(length(content)), 0) FROM nodes WHERE id IN (SELECT id FROM ancestors)
+"""
 
 
 def _not_blank(value: str) -> str:
@@ -125,6 +138,19 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
                 # A node that is still streaming (or failed) has incomplete text.
                 if found[node_id]["status"] != "complete":
                     raise HTTPException(status_code=409, detail=f"Node is not finished: {node_id}")
+
+            # Refused here rather than by the provider, whose error would arrive
+            # as a failed reply on a card that then has to be deleted.
+            history = await conn.fetchval(_HISTORY_CHARS_SQL, referenced, session_id)
+            tokens = (history + len(body.prompt)) / CHARS_PER_TOKEN
+            if tokens > CONTEXT_TOKENS[body.model] * CONTEXT_SHARE:
+                raise HTTPException(
+                    status_code=413,
+                    detail=(
+                        f"This conversation is too long for {LABELS[body.model]}. "
+                        "Continue from an earlier card, or merge fewer of them."
+                    ),
+                )
 
             parents: list[Placed] = [
                 (p, found[p]["position_x"], found[p]["position_y"]) for p in parent_ids

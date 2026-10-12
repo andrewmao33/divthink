@@ -6,8 +6,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400&display=swap" rel="stylesheet" />
-    <title>DivThink</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&display=swap" rel="stylesheet" />
+    <!-- The window's own background, set before anything else loads so the
+         page never opens with a flash of white. Every page is dark. The script
+         below marks the public pages (the policy, or the home page when nobody
+         is signed in: Supabase keeps the sign-in under an "sb-…-auth-token"
+         key), which scroll; SiteShell.tsx keeps the class in step once the app
+         is running. -->
+    <style>
+      html,
+      body {
+        background: #13130b;
+      }
+      /* Keep the scrollbar's strip of width set aside even on a page too short
+         to scroll. Otherwise a long page is narrower than a short one by the
+         width of the scrollbar, and everything centred shifts between them. */
+      html.site-dark {
+        scrollbar-gutter: stable;
+      }
+    </style>
+    <script>
+      try {
+        var path = location.pathname.replace(/\/$/, '')
+        var signedIn = Object.keys(localStorage).some(function (key) {
+          return /^sb-.*-auth-token$/.test(key)
+        })
+        var isDemo = location.search.indexOf('demo=') !== -1
+        var sitePages = ['/privacy', '/privacy.html']
+        if (sitePages.indexOf(path) !== -1 || (!signedIn && !isDemo)) {
+          document.documentElement.classList.add('site-dark')
+        }
+      } catch (e) {}
+    </script>
+    <title>Divthink</title>
     <meta
       name="description"
       content="DivThink is a canvas for conversations that branch instead of scrolling. Branch from any reply, follow several threads side by side, then merge them back."

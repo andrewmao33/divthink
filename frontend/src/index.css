@@ -1,35 +1,39 @@
 /* Global styles and design tokens. Component styles live next to each
    component in *.module.css files (CSS Modules: class names are scoped).
 
-   One palette for the whole product: the canvas and the landing page share
-   these values, so the app looks like the page that introduces it. */
+   One palette for the whole product: the canvas uses the same dark ground,
+   text colours and accent as the pages that introduce it (SiteShell.module.css). */
 
 :root {
-  /* Warm off-white ground, true black text. Secondary text is that same black
-     at 56% alpha rather than a separate grey, so it can never clash. */
-  --color-bg: #f7f6f5;
-  --color-surface: #ffffff;
-  --color-text: #000000;
-  --color-text-muted: #1919198f;
+  /* Warm near-black ground, off-white text. Panels and cards sit one step above
+     the ground, so they read as surfaces without needing a shadow. */
+  --color-bg: #13130b;
+  --color-surface: #1a1a12;
+  /* Cards are a step lighter than the panel and bars: they are the content,
+     and the rest is the frame around it. */
+  --color-card: #21211a;
+  --color-card-active: #2a2a22;
+  --color-text: #edecec;
+  --color-text-soft: #bab8b1;
+  --color-text-muted: #8f8d86;
 
-  /* Hairlines are black at low alpha: they tint whatever is behind them instead
-     of covering it. Edges are a little stronger — they cross open canvas, where
+  /* Hairlines are white at low alpha: they tint whatever is behind them instead
+     of covering it. Edges are stronger, because they cross open canvas, where
      an 8% line disappears. */
-  --color-border: #00000014;
-  --color-edge: #00000026;
+  --color-border: #ffffff14;
+  --color-border-strong: #ffffff2e;
+  --color-edge: #ffffff3d;
 
-  /* No accent colour. Emphasis comes from black, like the landing page. */
-  --color-accent: #000000;
-  --color-error: #b91c1c;
-  /* Text on a filled black surface. Named rather than #fff everywhere, so an
-     inverted surface only has to change in one place. */
-  --color-on-accent: #ffffff;
+  /* No accent colour for now: emphasis is the text colour itself. Kept as its
+     own token so a colour can come back in one place. */
+  --color-accent: #edecec;
+  --color-accent-hover: #ffffff;
+  --color-error: #f08a8a;
+  /* Text on a filled accent surface. */
+  --color-on-accent: #13130b;
 
-  /* Interaction. The tint is an alpha, so one value reads correctly on both the
-     off-white ground and the white panels — a solid colour would only suit one
-     of them, which is why menus and sidebar rows had drifted apart. */
-  --hover-tint: #0000000a;
-  --color-accent-hover: #262626;
+  /* An alpha, so one value reads correctly on both the ground and the panels. */
+  --hover-tint: #ffffff0f;
 
   /* Type */
   --font-sans: 'Inter Tight', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -50,8 +54,10 @@
   --space-6: 24px;
   --space-8: 32px;
 
-  /* Square corners throughout. */
-  --radius: 0;
+  /* Rounded corners: the larger for panels and cards, the smaller for the
+     buttons and chips inside them. */
+  --radius: 12px;
+  --radius-sm: 7px;
 }
 
 *,
@@ -73,4 +79,17 @@ body {
   color: var(--color-text);
   background: var(--color-bg);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbars: a thin, faint thumb on no track, so a scrolling area doesn't
+   show up as a white strip on the dark ground. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff2e transparent;
+}
+
+/* Selected text: white on a saturated electric blue, as on the public pages. */
+::selection {
+  background: #3a00ff;
+  color: #fff;
 }

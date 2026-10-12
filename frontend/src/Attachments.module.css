@@ -1,0 +1,29 @@
+/* Files sent with a prompt. */
+.images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--space-2);
+}
+
+.image {
+  border-radius: var(--radius-sm);
+  max-width: 100%;
+  max-height: 240px;
+  border: 1px solid var(--color-border);
+}
+
+/* A PDF has no thumbnail, so its name stands in. */
+.fileChip {
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

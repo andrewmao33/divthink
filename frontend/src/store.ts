@@ -1,21 +1,24 @@
-import { applyNodeChanges, type Edge, type NodeChange } from '@xyflow/react'
+import type { Edge } from '@xyflow/react'
 import { create } from 'zustand'
 import {
   ApiError,
   createSession,
+  deleteSession,
   deleteNodes,
   generate,
   getPublicSession,
   getSession,
   listModels,
   listSessions,
-  savePositions as savePositionsRequest,
-  setTitle as setTitleRequest,
+  renameSession,
+  saveLayout,
+  type CardLayout,
   type ModelInfo,
   type Session,
 } from './api'
-import { addMissing, applyEvent, fromServer, removeNodes, selectOnly, type BoxNode } from './graph'
-import { tidyPositions } from './tidy'
+import { DEMO_ACTIVE, DEMO_TITLE, demoGraph } from './demo'
+import { exchangesOf, labelOf } from './exchanges'
+import { addMissing, applyEvent, fromServer, removeNodes, type BoxNode } from './graph'
 import { readStream, type StreamEvent } from './stream'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -33,15 +36,28 @@ export type PendingFile = {
   name: string
 }
 
-// A delete waiting for "Delete N boxes?" confirmation.
-type PendingDelete = { nodeIds: string[]; count: number }
+// A delete waiting to be confirmed. `label` names the card in the question.
+type PendingDelete = { nodeIds: string[]; label: string }
 
 type CanvasState = {
   status: LoadStatus
   error: string | null
   session: Session | null
+  // The server's nodes and edges as they arrive. What is drawn is one card per
+  // prompt and reply, derived from these by exchanges.ts.
   nodes: BoxNode[]
   edges: Edge[]
+  // The card the panel shows the conversation up to, and the next prompt
+  // continues from. null: a new thread, not started yet.
+  activeId: string | null
+  // Where "Back to …" returns to while a new thread is still empty.
+  previousActiveId: string | null
+  // Cards picked to be merged, in the order they were picked. While there are
+  // any, the panel is a merge draft and the next prompt is asked across them.
+  mergeIds: string[]
+  // The card the canvas should centre on. A new object each time, so asking for
+  // the same card twice still moves the view.
+  focus: { id: string } | null
   // Live updates: 'reconnecting' after the stream drops, until it's back.
   connection: 'live' | 'reconnecting'
   highlight: Highlight | null
@@ -52,13 +68,15 @@ type CanvasState = {
   // One-line message above the chat box: a failed send, a refused delete, …
   notice: string | null
   pendingDelete: PendingDelete | null
-  // Boxes the view should move to, set after sending a prompt.
-  focusNodeIds: string[] | null
-  // Bumped to send the view back to the canvas origin, after a reformat.
-  homeView: number
   // The public demo: everything that writes is refused, and there is no stream.
   readOnly: boolean
   loadPublicSession: (id: string) => Promise<void>
+  // The example on the landing page: everything works, but only in this
+  // browser. Nothing is sent to the server, and a prompt gets a fixed reply.
+  demo: boolean
+  // What a visitor has typed into the demo since arriving at the active card.
+  demoEchoes: string[]
+  loadDemo: () => void
   keysOpen: boolean // the API keys dialog
   openKeys: () => void
   closeKeys: () => void
@@ -66,26 +84,42 @@ type CanvasState = {
   newSession: () => Promise<void>
   loadModels: () => Promise<void>
   setModel: (id: string) => void
-  // Sends a prompt whose parents are the selected boxes (none: a new tree).
+  // Makes a card the active one. `centre` also moves the canvas to it, for
+  // jumps made from the panel, where the card may be off screen.
+  setActive: (id: string, centre?: boolean) => void
+  // Clears the panel for a new thread. Nothing is created until a prompt is sent.
+  startNewThread: () => void
+  // Adds a card to the merge, or takes it out. Starting a merge from nothing
+  // brings the active card along: "this one, and that one".
+  toggleMerge: (id: string) => void
+  clearMerge: () => void
+  // Sends a prompt that continues from the active card (none: a new thread),
+  // or across the cards picked to merge.
   sendPrompt: (prompt: string) => Promise<boolean>
-  deleteSelected: () => Promise<void>
-  // Deletes specific boxes (the right-click menu), with the same confirmation.
-  deleteNodeIds: (nodeIds: string[]) => Promise<void>
+  // Records where a card was dragged to or how it was resized. null hands it
+  // back to the automatic layout.
+  placeCard: (id: string, layout: CardLayout | null) => void
+  placeCards: (cards: { id: string; layout: CardLayout | null }[]) => void
+  // Hands every card's position back to the automatic layout. Sizes are kept:
+  // a card made bigger to read stays that way.
+  tidy: () => void
+  renameCanvas: (title: string) => void
+  // Deletes a canvas for good. Resolves to whether it went. Deleting the open
+  // one moves on to the most recently used of the rest, or a new one.
+  deleteCanvas: (id: string) => Promise<boolean>
+  // Asks to delete a card. Only a card nothing continues from can go.
+  requestDelete: (id: string) => void
   confirmDelete: () => Promise<void>
   cancelDelete: () => void
-  savePositions: (boxes: BoxNode[]) => void
-  // Lays every box back out into rows and saves where they landed.
-  reformat: () => void
-  renameNode: (nodeId: string, title: string) => void
-  clearSelection: () => void
+  // `sourceNodeId` is the reply the text was highlighted in.
   startBranch: (sourceNodeId: string, text: string) => void
   clearHighlight: () => void
   addImages: (files: File[]) => Promise<void>
   removeImage: (id: string) => void
-  onNodesChange: (changes: NodeChange<BoxNode>[]) => void
 }
 
 const MODEL_STORAGE_KEY = 'divthink.model'
+const SESSION_STORAGE_KEY = 'divthink.session'
 const MAX_IMAGES = 8
 export const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 export const ALLOWED_TYPES = [...ALLOWED_IMAGE_TYPES, 'application/pdf']
@@ -107,6 +141,10 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   session: null,
   nodes: [],
   edges: [],
+  activeId: null,
+  previousActiveId: null,
+  mergeIds: [],
+  focus: null,
   connection: 'live',
   highlight: null,
   images: [],
@@ -115,10 +153,31 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   sending: false,
   notice: null,
   pendingDelete: null,
-  focusNodeIds: null,
-  homeView: 0,
   readOnly: false,
+  demo: false,
+  demoEchoes: [],
   keysOpen: false,
+
+  loadDemo: () => {
+    const now = new Date().toISOString()
+    set({
+      ...fromServer(demoGraph(), []),
+      session: { id: 'demo', title: DEMO_TITLE, default_model: null, created_at: now, updated_at: now },
+      status: 'ready',
+      error: null,
+      connection: 'live',
+      readOnly: false,
+      demo: true,
+      demoEchoes: [],
+      activeId: DEMO_ACTIVE,
+      previousActiveId: null,
+      mergeIds: [],
+      focus: { id: DEMO_ACTIVE },
+      highlight: null,
+      notice: null,
+      pendingDelete: null,
+    })
+  },
 
   openKeys: () => set({ keysOpen: true }),
   closeKeys: () => set({ keysOpen: false }),
@@ -128,7 +187,16 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
     try {
       const graph = await getPublicSession(id)
       const { nodes: _nodes, edges: _edges, ...session } = graph
-      set((s) => ({ ...fromServer(graph, s.nodes), session, status: 'ready', connection: 'live' }))
+      // readOnly again: signing out resets the store, and on a first visit that
+      // can land between the line above and this one.
+      set((s) => ({
+        ...fromServer(graph, s.nodes),
+        session,
+        status: 'ready',
+        connection: 'live',
+        readOnly: true,
+      }))
+      openLatest()
     } catch {
       set({ status: 'error', error: "That canvas isn't available." })
     }
@@ -141,18 +209,30 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
     set({
       status: 'loading',
       error: null,
+      demo: false,
+      demoEchoes: [],
       nodes: [],
       edges: [],
+      activeId: null,
+      previousActiveId: null,
+      mergeIds: [],
+      focus: null,
       highlight: null,
       notice: null,
       pendingDelete: null,
-      focusNodeIds: null,
     })
     try {
-      await sync(id ?? (await latestOrNewSessionId()))
+      // No canvas named in the address: reopen the one last open in this
+      // browser, and if that one is gone, the most recently used.
+      const remembered = id ? null : readLastSession()
+      try {
+        await sync(id ?? remembered ?? (await latestOrNewSessionId()))
+      } catch (e) {
+        if (!remembered || !isMissing(e)) throw e
+        await sync(await latestOrNewSessionId())
+      }
     } catch (e) {
-      const missing = e instanceof ApiError && (e.status === 404 || e.status === 422)
-      set({ status: 'error', error: missing ? "That canvas doesn't exist." : messageFor(e) })
+      set({ status: 'error', error: isMissing(e) ? "That canvas doesn't exist." : messageFor(e) })
     }
   },
 
@@ -187,18 +267,73 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
     saveModel(id)
   },
 
+  setActive: (id, centre = false) =>
+    set((s) => {
+      // A quote belongs to the card it was highlighted in; moving elsewhere drops it.
+      const quoteStays = s.highlight !== null && ownerOf(s, s.highlight.sourceNodeId) === id
+      return {
+        activeId: id,
+        previousActiveId: null,
+        demoEchoes: id === s.activeId ? s.demoEchoes : [],
+        highlight: quoteStays ? s.highlight : null,
+        focus: centre ? { id } : s.focus,
+        notice: null,
+      }
+    }),
+
+  startNewThread: () =>
+    set((s) => ({
+      activeId: null,
+      previousActiveId: s.activeId ?? s.previousActiveId,
+      demoEchoes: [],
+      mergeIds: [],
+      highlight: null,
+      notice: null,
+    })),
+
+  toggleMerge: (id) =>
+    set((s) => {
+      if (s.readOnly) return s
+      const picked = s.mergeIds.includes(id)
+        ? s.mergeIds.filter((other) => other !== id)
+        : s.mergeIds.length === 0 && s.activeId && s.activeId !== id
+          ? [s.activeId, id]
+          : [...s.mergeIds, id]
+      return { mergeIds: picked, highlight: null, notice: null, pendingDelete: null }
+    }),
+
+  clearMerge: () => set({ mergeIds: [] }),
+
   sendPrompt: async (prompt) => {
-    const { session, sending, nodes, highlight, model, images, readOnly } = get()
+    const { session, sending, nodes, edges, activeId, mergeIds, highlight, model, images, readOnly } =
+      get()
     if (!session || sending || readOnly) return false
-    const parentIds = nodes.filter((box) => box.selected).map((box) => box.id)
+    // The new prompt hangs from the reply of the active card, or from the reply
+    // of every card picked to merge.
+    const { byId } = exchangesOf(nodes, edges)
+    const from = mergeIds.length > 0 ? mergeIds : activeId ? [activeId] : []
+    const parentIds = from.flatMap((id) => {
+      const exchange = byId.get(id)
+      return exchange ? [exchange.reply?.id ?? exchange.id] : []
+    })
+    if (get().demo) {
+      // No server and no model: the prompt is echoed in the panel with a fixed
+      // answer, and the canvas is left as it was.
+      set((s) => ({
+        demoEchoes: [...s.demoEchoes, prompt],
+        mergeIds: [],
+        highlight: null,
+        images: [],
+        notice: null,
+        pendingDelete: null,
+      }))
+      return true
+    }
     set({ sending: true, notice: null, pendingDelete: null })
     try {
       const created = await generate(session.id, {
         prompt,
         parent_ids: parentIds,
-        // Every box, not just the parents: the server also uses these to find a
-        // spot where the new boxes don't land on anything.
-        parent_heights: measuredHeights(nodes),
         ...(model && { model }),
         ...(highlight && {
           highlight: { source_node_id: highlight.sourceNodeId, text: highlight.text },
@@ -220,13 +355,15 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
         set((s) => addMissing(s, graph))
       }
       set((s) => ({
-        // Select the new reply, so pressing Enter again continues this thread.
-        nodes: selectOnly(s.nodes, created.assistant_node_id),
+        // The new card becomes the active one, so sending again continues it.
+        activeId: created.user_node_id,
+        previousActiveId: null,
+        mergeIds: [],
+        focus: { id: created.user_node_id },
         session: s.session && { ...s.session, title: created.session_title },
         highlight: null,
         images: [],
         sending: false,
-        focusNodeIds: [created.user_node_id, created.assistant_node_id],
       }))
       return true
     } catch (e) {
@@ -235,26 +372,12 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
     }
   },
 
-  deleteSelected: async () => {
-    const selected = get().nodes.filter((box) => box.selected).map((box) => box.id)
-    await get().deleteNodeIds(selected)
-  },
-
-  deleteNodeIds: async (nodeIds) => {
-    const { session, pendingDelete, readOnly } = get()
-    if (!session || nodeIds.length === 0 || pendingDelete || readOnly) return
-    set({ notice: null })
-    try {
-      // Ask the server what would go. Confirm only when it's more than what was asked for.
-      const { deleted_node_ids } = await deleteNodes(session.id, nodeIds, true)
-      if (deleted_node_ids.length > nodeIds.length) {
-        set({ pendingDelete: { nodeIds, count: deleted_node_ids.length } })
-      } else {
-        await deleteForGood(nodeIds)
-      }
-    } catch (e) {
-      set({ notice: messageFor(e) })
-    }
+  requestDelete: (id) => {
+    const { nodes, edges, pendingDelete, readOnly } = get()
+    const exchange = exchangesOf(nodes, edges).byId.get(id)
+    if (!exchange || exchange.children.length > 0 || pendingDelete || readOnly) return
+    const nodeIds = [exchange.id, exchange.reply?.id].filter((n): n is string => Boolean(n))
+    set({ pendingDelete: { nodeIds: [...new Set(nodeIds)], label: labelOf(exchange) }, notice: null })
   },
 
   confirmDelete: async () => {
@@ -266,49 +389,75 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
 
   cancelDelete: () => set({ pendingDelete: null }),
 
-  savePositions: (boxes) => {
+  placeCard: (id, layout) => get().placeCards([{ id, layout }]),
+
+  placeCards: (cards) => {
     const { session, readOnly } = get()
-    if (!session || boxes.length === 0 || readOnly) return
-    const positions = boxes.map((box) => ({ id: box.id, x: box.position.x, y: box.position.y }))
-    savePositionsRequest(session.id, positions).catch(() =>
-      set({ notice: "Couldn't save where the boxes were moved. They'll jump back on refresh." }),
+    if (cards.length === 0) return
+    const placed = new Map(cards.map((card) => [card.id, card.layout]))
+    // Applied here first, so a card doesn't jump back while the save is on its way.
+    set((s) => ({
+      nodes: s.nodes.map((box) => {
+        if (!placed.has(box.id)) return box
+        const layout = placed.get(box.id)
+        const { layout: _old, ...metadata } = box.data.node.metadata
+        const node = { ...box.data.node, metadata: layout ? { ...metadata, layout } : metadata }
+        return { ...box, data: { ...box.data, node } }
+      }),
+    }))
+    // The public canvas and the demo can be rearranged, just not saved.
+    if (!session || readOnly || get().demo) return
+    saveLayout(session.id, cards).catch(() =>
+      set({ notice: "Couldn't save where that card was put. It'll move back on refresh." }),
     )
   },
 
-  reformat: () => {
-    const { nodes, edges, session } = get()
-    if (!session || nodes.length === 0) return
-    const placed = new Map(tidyPositions(nodes, edges).map((p) => [p.id, p]))
-    const moved = nodes.map((box) => {
-      const next = placed.get(box.id)
-      return next ? { ...box, position: { x: next.x, y: next.y } } : box
-    })
-    set({ nodes: moved, homeView: Date.now() })
-    savePositionsRequest(
-      session.id,
-      moved.map((b) => ({ id: b.id, x: b.position.x, y: b.position.y })),
-    ).catch(() => set({ notice: "Couldn't save the new layout." }))
+  deleteCanvas: async (id) => {
+    if (get().readOnly) return false
+    try {
+      await deleteSession(id)
+    } catch (e) {
+      set({ notice: messageFor(e) })
+      return false
+    }
+    if (get().session?.id === id) {
+      stream?.abort() // its live updates have nothing left to report
+      await get().loadSession(null)
+    }
+    return true
   },
 
-  renameNode: (nodeId, title) => {
+  tidy: () => {
+    const { nodes, edges, activeId } = get()
+    const moved = exchangesOf(nodes, edges).list.filter((e) => e.layout?.x !== undefined)
+    get().placeCards(
+      moved.map(({ id, layout }) => {
+        const { width, height } = layout ?? {}
+        const size = { ...(width && { width }), ...(height && { height }) }
+        return { id, layout: Object.keys(size).length > 0 ? size : null }
+      }),
+    )
+    // Everything may have moved, so bring the view back to the active card.
+    if (activeId) set({ focus: { id: activeId } })
+  },
+
+  renameCanvas: (title) => {
     const { session, readOnly } = get()
-    if (!session || readOnly) return
-    // Applied locally first; the stream echoes it back for other tabs.
-    set((s) => ({
-      nodes: s.nodes.map((box) =>
-        box.id === nodeId
-          ? { ...box, data: { ...box.data, node: { ...box.data.node, metadata: { ...box.data.node.metadata, title: title || undefined } } } }
-          : box,
-      ),
-    }))
-    setTitleRequest(session.id, nodeId, title).catch(() => set({ notice: "Couldn't save that title." }))
+    const next = title.split(/\s+/).join(' ').trim()
+    if (!session || readOnly || next === session.title) return
+    set({ session: { ...session, title: next } })
+    renameSession(session.id, next).catch(() => set({ notice: "Couldn't rename the canvas." }))
   },
 
-  clearSelection: () => set((s) => ({ nodes: selectOnly(s.nodes, null) })),
-
-  // Branching selects the source reply, so the quote's context is that reply and its ancestors.
+  // Branching makes the quoted reply's card the active one, so the quote's
+  // context is that card and everything above it.
   startBranch: (sourceNodeId, text) =>
-    set((s) => ({ highlight: { sourceNodeId, text }, nodes: selectOnly(s.nodes, sourceNodeId), notice: null })),
+    set((s) => ({
+      highlight: { sourceNodeId, text },
+      activeId: ownerOf(s, sourceNodeId) ?? s.activeId,
+      previousActiveId: null,
+      notice: null,
+    })),
 
   clearHighlight: () => set({ highlight: null }),
 
@@ -336,16 +485,16 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       if (going?.preview) URL.revokeObjectURL(going.preview) // the object URL leaks otherwise
       return { images: s.images.filter((i) => i.id !== id) }
     }),
-
-
-  // Dragging and selecting update boxes locally; positions are saved on drag stop.
-  onNodesChange: (changes) => set({ nodes: applyNodeChanges(changes, get().nodes) }),
 }))
 
 // Removes boxes from the canvas and the server, and drops a quote whose reply is gone.
 async function deleteForGood(nodeIds: string[]) {
-  const { session } = useCanvasStore.getState()
+  const { session, demo } = useCanvasStore.getState()
   if (!session) return
+  if (demo) {
+    useCanvasStore.setState((s) => withoutNodes(s, nodeIds))
+    return
+  }
   try {
     const { deleted_node_ids } = await deleteNodes(session.id, nodeIds, false)
     useCanvasStore.setState((s) => withoutNodes(s, deleted_node_ids))
@@ -355,21 +504,34 @@ async function deleteForGood(nodeIds: string[]) {
 }
 
 function withoutNodes(s: CanvasState, nodeIds: string[]) {
-  const quoteGone = s.highlight !== null && nodeIds.includes(s.highlight.sourceNodeId)
-  return { ...removeNodes(s, nodeIds), highlight: quoteGone ? null : s.highlight }
+  const gone = new Set(nodeIds)
+  const quoteGone = s.highlight !== null && gone.has(s.highlight.sourceNodeId)
+  // Deleting the active card steps back to the one it continued from.
+  let activeId = s.activeId
+  if (activeId && gone.has(activeId)) {
+    const active = exchangesOf(s.nodes, s.edges).byId.get(activeId)
+    activeId = active?.parents.find((id) => !gone.has(id)) ?? null
+  }
+  const previousGone = s.previousActiveId !== null && gone.has(s.previousActiveId)
+  return {
+    ...removeNodes(s, nodeIds),
+    highlight: quoteGone ? null : s.highlight,
+    mergeIds: s.mergeIds.filter((id) => !gone.has(id)),
+    activeId,
+    previousActiveId: previousGone ? null : s.previousActiveId,
+  }
 }
 
-// How tall every box is on screen. React Flow measures them after render; one
-// that hasn't been measured yet is left out and the server falls back to its own
-// estimate. Boxes are as tall as their text, so without this the server would
-// both place new boxes on top of long replies and fail to see what is in the way.
-function measuredHeights(nodes: BoxNode[]): Record<string, number> {
-  const heights: Record<string, number> = {}
-  for (const box of nodes) {
-    const height = box.measured?.height
-    if (height) heights[box.id] = Math.round(height)
-  }
-  return heights
+// The card a server node belongs to: a reply's id gives its prompt's card.
+function ownerOf(s: CanvasState, nodeId: string): string | undefined {
+  return exchangesOf(s.nodes, s.edges).ownerOf.get(nodeId)
+}
+
+// Opening a canvas lands on the card most recently added, centred.
+function openLatest() {
+  const { nodes, edges } = useCanvasStore.getState()
+  const latest = exchangesOf(nodes, edges).list.at(-1)
+  if (latest) useCanvasStore.setState({ activeId: latest.id, focus: { id: latest.id } })
 }
 
 // ---- Live stream ----------------------------------------------------------------
@@ -389,6 +551,10 @@ export function resetCanvas() {
     session: null,
     nodes: [],
     edges: [],
+    activeId: null,
+    previousActiveId: null,
+    mergeIds: [],
+    focus: null,
     connection: 'live',
     highlight: null,
     images: [],
@@ -397,9 +563,9 @@ export function resetCanvas() {
     sending: false,
     notice: null,
     pendingDelete: null,
-    focusNodeIds: null,
-    homeView: 0,
     readOnly: false,
+    demo: false,
+    demoEchoes: [],
     keysOpen: false,
   })
 }
@@ -457,12 +623,16 @@ async function sync(sessionId: string): Promise<void> {
   }
   if (abort.signal.aborted) return // another canvas was opened meanwhile
   const { nodes: _nodes, edges: _edges, ...session } = graph
+  // A reconnect lands here too, and must leave the active card where it is.
+  const firstLoad = useCanvasStore.getState().status !== 'ready'
   useCanvasStore.setState((s) => ({
     ...fromServer(graph, s.nodes),
     session,
     status: 'ready',
     connection: 'live',
   }))
+  if (firstLoad) openLatest()
+  rememberLastSession(sessionId)
   for (const event of waiting) apply(event)
   caughtUp = true
 
@@ -487,6 +657,27 @@ function reconnect(sessionId: string, attempt: number) {
 async function latestOrNewSessionId(): Promise<string> {
   const sessions = await listSessions() // newest first
   return sessions[0]?.id ?? (await createSession()).id
+}
+
+function isMissing(e: unknown): boolean {
+  return e instanceof ApiError && (e.status === 404 || e.status === 422)
+}
+
+// The canvas open last time, remembered in this browser only.
+function readLastSession(): string | null {
+  try {
+    return window.localStorage.getItem(SESSION_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+function rememberLastSession(id: string) {
+  try {
+    window.localStorage.setItem(SESSION_STORAGE_KEY, id)
+  } catch {
+    // Storage unavailable (private window); the canvas just isn't remembered.
+  }
 }
 
 // The model picked last time, remembered in this browser only.

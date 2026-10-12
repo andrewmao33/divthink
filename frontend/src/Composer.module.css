@@ -1,0 +1,288 @@
+/* The foot of the panel: a line above for status, the prompt, then the controls. */
+.composer {
+  flex: none;
+  padding: var(--space-3) var(--space-4) var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+/* While a file is held over it. */
+.dropping {
+  background: var(--hover-tint);
+}
+
+.input {
+  display: block;
+  width: 100%;
+  padding: var(--space-1) 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-body);
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+.input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+/* What sending will do, when that isn't simply "continue the conversation". */
+.hint {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.statusText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-soft);
+}
+
+.error {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-error);
+}
+
+.danger,
+.textButton {
+  flex: none;
+  padding: 2px var(--space-2);
+  border: 0;
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.danger {
+  border-radius: var(--radius-sm);
+  background: var(--color-error);
+  color: var(--color-on-accent);
+}
+
+.textButton {
+  background: none;
+  color: var(--color-text-muted);
+}
+
+.textButton:hover {
+  color: var(--color-text);
+}
+
+.clear {
+  flex: none;
+  padding: 0 var(--space-1);
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--text-base);
+  line-height: 1;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.clear:hover {
+  color: var(--color-text);
+}
+
+/* The highlighted passage the next prompt is about. */
+.quote {
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  padding: 6px var(--space-2) 6px 10px;
+  border-left: 2px solid var(--color-border-strong);
+  background: var(--hover-tint);
+}
+
+.quoteText {
+  display: -webkit-box;
+  flex: 1;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  color: var(--color-text-soft);
+  white-space: pre-wrap;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+/* Model picker: plain text until hovered, pushed away from the paperclip. */
+.model {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 180px;
+  margin-right: auto;
+  padding: var(--space-1) 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.model:hover,
+.model:focus-visible {
+  outline: none;
+  color: var(--color-text);
+}
+
+/* Hidden: the paperclip button opens it. */
+.fileInput {
+  display: none;
+}
+
+.attach {
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: -6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.attach:hover,
+.attach:focus-visible {
+  outline: none;
+  background: var(--hover-tint);
+  color: var(--color-text);
+}
+
+/* Fully round: the button the whole panel leads to. */
+.send {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-text);
+  color: var(--color-bg);
+  cursor: pointer;
+}
+
+/* Sending a merge says what it does, rather than being the usual arrow. */
+.mergeSend {
+  flex: none;
+  padding: 6px var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-bg);
+  cursor: pointer;
+}
+
+.mergeSend:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.mergeSend:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.send:hover:not(:disabled) {
+  background: var(--color-accent);
+}
+
+.send:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Files waiting to be sent. */
+.thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--space-2);
+}
+
+.thumb {
+  position: relative;
+  width: 56px;
+  height: 56px;
+}
+
+.thumb img {
+  border-radius: var(--radius-sm);
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--color-border);
+  object-fit: cover;
+}
+
+.thumbRemove {
+  border-radius: 50%;
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+/* A PDF has no thumbnail, so it shows its name. */
+.fileChip {
+  border-radius: var(--radius-sm);
+  position: relative;
+  display: flex;
+  align-items: center;
+  max-width: 180px;
+  height: 56px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.fileName {
+  overflow: hidden;
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

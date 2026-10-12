@@ -32,6 +32,25 @@ class Position(BaseModel):
     y: float
 
 
+class CardLayout(BaseModel):
+    """Where a card was dragged to and how big it was made. Any part may be
+    missing: a card that was only resized has no position of its own."""
+
+    x: float | None = None
+    y: float | None = None
+    width: float | None = Field(default=None, gt=0, le=4000)
+    height: float | None = Field(default=None, gt=0, le=4000)
+
+
+class CardLayoutItem(BaseModel):
+    id: UUID
+    layout: CardLayout | None  # None puts the card back where the layout would
+
+
+class SaveLayoutRequest(BaseModel):
+    cards: list[CardLayoutItem] = Field(min_length=1, max_length=1000)
+
+
 class SavePositionsRequest(BaseModel):
     positions: list[Position] = Field(min_length=1, max_length=1000)
 
@@ -143,6 +162,33 @@ async def save_positions(session_id: UUID, body: SavePositionsRequest, user_id: 
         await conn.executemany(
             "UPDATE nodes SET position_x = $3, position_y = $4 WHERE id = $2 AND session_id = $1",
             [(session_id, p.id, p.x, p.y) for p in body.positions],
+        )
+    return Response(status_code=204)
+
+
+@router.patch("/{session_id}/layout", status_code=204)
+async def save_layout(session_id: UUID, body: SaveLayoutRequest, user_id: UUID = Depends(current_user)):
+    """Save cards the user moved or resized by hand. Kept in each node's metadata;
+    cards without one are placed by the browser's automatic layout."""
+    async with get_pool().acquire() as conn:
+        exists = await conn.fetchval(
+            "SELECT 1 FROM sessions WHERE id = $1 AND user_id = $2", session_id, user_id
+        )
+        if not exists:
+            raise HTTPException(status_code=404, detail="Session not found")
+        await conn.executemany(
+            """
+            UPDATE nodes
+            SET metadata = CASE
+                WHEN $3::jsonb IS NULL THEN metadata - 'layout'
+                ELSE metadata || jsonb_build_object('layout', $3::jsonb)
+            END
+            WHERE id = $2 AND session_id = $1
+            """,
+            [
+                (session_id, c.id, c.layout.model_dump(exclude_none=True) if c.layout else None)
+                for c in body.cards
+            ],
         )
     return Response(status_code=204)
 

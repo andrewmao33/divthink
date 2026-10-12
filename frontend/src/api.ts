@@ -88,6 +88,18 @@ export function createSession(): Promise<Session> {
   return request('/sessions', { method: 'POST', body: '{}' })
 }
 
+export function renameSession(id: string, title: string): Promise<void> {
+  return request(`/sessions/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ title }),
+  })
+}
+
+// Deletes a canvas and everything on it. There is no undo.
+export function deleteSession(id: string): Promise<void> {
+  return request(`/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
 export function getSession(id: string): Promise<SessionGraph> {
   return request(`/sessions/${encodeURIComponent(id)}`)
 }
@@ -159,13 +171,18 @@ export function deleteNodes(
   })
 }
 
-export function savePositions(
+// Where a card was dragged to and how big it was made. Any part may be missing;
+// what is missing is decided by the automatic layout.
+export type CardLayout = { x?: number; y?: number; width?: number; height?: number }
+
+// Saves a card's hand-made layout. null puts it back under the automatic one.
+export function saveLayout(
   sessionId: string,
-  positions: { id: string; x: number; y: number }[],
+  cards: { id: string; layout: CardLayout | null }[],
 ): Promise<void> {
-  return request(`/sessions/${encodeURIComponent(sessionId)}/positions`, {
+  return request(`/sessions/${encodeURIComponent(sessionId)}/layout`, {
     method: 'PATCH',
-    body: JSON.stringify({ positions }),
+    body: JSON.stringify({ cards }),
   })
 }
 

@@ -1,0 +1,4 @@
+{
+  "redirects": [{ "source": "/privacy.html", "destination": "/privacy", "permanent": true }],
+  "rewrites": [{ "source": "/privacy", "destination": "/index.html" }]
+}
