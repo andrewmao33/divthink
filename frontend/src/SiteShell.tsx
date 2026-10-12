@@ -31,67 +31,84 @@ function SiteShell({ current, children }: { current: Page; children?: ReactNode 
 
   return (
     <div className={styles.page}>
-      <div className={styles.frame}>
-        <nav className={styles.menu} aria-label="Main">
-          <img className={styles.mark} src="/logo.svg" alt="" />
-          <ul className={styles.menuList}>
-            {PAGES.map(({ page, href, label }) => (
-              <li key={page}>
-                <a
-                  className={styles.menuLink}
-                  href={href}
-                  onClick={onLinkClick}
-                  aria-current={current === page ? 'page' : undefined}
-                >
-                  {label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
+      {/* What shows in the gap when the page bounces past its top or bottom. */}
+      <div className={styles.backdrop} />
 
-        <div className={styles.content}>
-          <main className={styles.main}>{children}</main>
+      {/* The menu and "Get started" are fixed to the window, not part of what
+          scrolls, so they hold still even while the page bounces. */}
+      <div className={styles.pinned}>
+        <div className={styles.frame}>
+          <nav className={styles.menu} aria-label="Main">
+            <img className={styles.mark} src="/logo.svg" alt="" />
+            <ul className={styles.menuList}>
+              {PAGES.map(({ page, href, label }) => (
+                <li key={page}>
+                  <a
+                    className={styles.menuLink}
+                    href={href}
+                    onClick={onLinkClick}
+                    aria-current={current === page ? 'page' : undefined}
+                  >
+                    {label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
 
-          <footer className={styles.footer}>
-            <div className={styles.footerLinks}>
-              <ul>
-                {PAGES.slice(1).map(({ page, href, label }) => (
-                  <li key={page}>
-                    <a href={href} onClick={onLinkClick}>
-                      {label}
+          <div className={styles.between} />
+
+          <div className={styles.corner}>
+            <button type="button" className={styles.start} onClick={start} disabled={busy}>
+              {busy ? 'Redirecting…' : 'Get started'}
+            </button>
+            {error && <p className={styles.error}>{error}</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.sheet}>
+        <div className={styles.frame}>
+          <div className={styles.menuSpace} />
+
+          <div className={styles.content}>
+            <main className={styles.main}>{children}</main>
+
+            <footer className={styles.footer}>
+              <div className={styles.footerLinks}>
+                <ul>
+                  {PAGES.slice(1).map(({ page, href, label }) => (
+                    <li key={page}>
+                      <a href={href} onClick={onLinkClick}>
+                        {label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+                <ul>
+                  <li>
+                    <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener">
+                      GitHub
+                      <span className={styles.external} aria-hidden="true">
+                        ↗
+                      </span>
                     </a>
                   </li>
-                ))}
-              </ul>
-              <ul>
-                <li>
-                  <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener">
-                    GitHub
-                    <span className={styles.external} aria-hidden="true">
-                      ↗
-                    </span>
-                  </a>
-                </li>
-              </ul>
-              <ul>
-                <li>
-                  {/* Google's sign-in consent screen requires the policy to be linked from the home page. */}
-                  <a href="/privacy" onClick={onLinkClick}>
-                    Privacy Policy
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <p className={styles.copyright}>© Divthink {new Date().getFullYear()}</p>
-          </footer>
-        </div>
+                </ul>
+                <ul>
+                  <li>
+                    {/* Google's sign-in consent screen requires the policy to be linked from the home page. */}
+                    <a href="/privacy" onClick={onLinkClick}>
+                      Privacy Policy
+                    </a>
+                  </li>
+                </ul>
+              </div>
+              <p className={styles.copyright}>© Divthink {new Date().getFullYear()}</p>
+            </footer>
+          </div>
 
-        <div className={styles.corner}>
-          <button type="button" className={styles.start} onClick={start} disabled={busy}>
-            {busy ? 'Redirecting…' : 'Get started'}
-          </button>
-          {error && <p className={styles.error}>{error}</p>}
+          <div className={styles.cornerSpace} />
         </div>
       </div>
     </div>

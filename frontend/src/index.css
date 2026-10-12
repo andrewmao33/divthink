@@ -7,12 +7,12 @@
 :root {
   /* Warm near-black ground, off-white text. Panels and cards sit one step above
      the ground, so they read as surfaces without needing a shadow. */
-  --color-bg: #13130b;
-  --color-surface: #1a1a12;
+  --color-bg: #1d1b18;
+  --color-surface: #24221f;
   /* Cards are a step lighter than the panel and bars: they are the content,
      and the rest is the frame around it. */
-  --color-card: #21211a;
-  --color-card-active: #2a2a22;
+  --color-card: #2b2926;
+  --color-card-active: #34322f;
   --color-text: #edecec;
   --color-text-soft: #bab8b1;
   --color-text-muted: #8f8d86;
@@ -30,7 +30,7 @@
   --color-accent-hover: #ffffff;
   --color-error: #f08a8a;
   /* Text on a filled accent surface. */
-  --color-on-accent: #13130b;
+  --color-on-accent: #1d1b18;
 
   /* An alpha, so one value reads correctly on both the ground and the panels. */
   --hover-tint: #ffffff0f;

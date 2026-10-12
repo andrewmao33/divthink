@@ -3,7 +3,7 @@
    own and deliberately don't touch the shared tokens in index.css. */
 
 .page {
-  --bg: #13130b; /* warm near-black: brown-tinted rather than blue */
+  --bg: #1d1b18; /* warm near-black: brown-tinted rather than blue */
   --text: #edecec;
   --text-muted: #8f8d86;
   --text-soft: #bab8b1; /* between the two: the corner link */
@@ -33,8 +33,13 @@
      element's opacity below is set for the orange layer);
    - burnt-orange specks from a different noise seed with a higher cut-off, so
      they are far fewer. A different tile size keeps the two from repeating
-     together. */
-.page::before {
+     together.
+   It is laid twice: on the backdrop, which is fixed to the window, and on the
+   sheet that scrolls over it. The sheet is solid, so only one shows at a time;
+   the backdrop's is what appears in the gap when the page bounces past an
+   end. */
+.backdrop::before,
+.sheet::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -45,9 +50,46 @@
   pointer-events: none;
 }
 
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+}
+
+/* Everything that scrolls. */
+.sheet {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  background: var(--bg);
+}
+
+/* The menu and the sign-in link, fixed to the window in a frame of their own
+   so they line up with the columns kept empty for them underneath. Fixed
+   rather than sticky: a sticky element is dragged along when the page bounces.
+   Only the two of them take clicks; the rest lets the page through. */
+.pinned {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  pointer-events: none;
+}
+
+.pinned .menu,
+.pinned .corner {
+  pointer-events: auto;
+}
+
+.between {
+  flex: 1;
+}
+
 /* One centred frame in three columns: the menu down the left, the sign-in link
-   down the right, the page's own content in the space between. Both side
-   columns stay put while the content scrolls past. */
+   down the right, the page's own content in the space between. It is drawn
+   twice, one over the other: the pinned one holds the two side columns, the
+   scrolling one holds the content and leaves the sides empty. */
 .frame {
   position: relative;
   flex: 1;
@@ -60,17 +102,19 @@
 
 /* ---- Menu ------------------------------------------------------------------ */
 
-/* Sticky, so it stays in view however far a long page scrolls. Its fixed width
-   is also what sets where the content column starts. The logo sits above the
+/* Its fixed width is also what sets where the content column starts (see
+   .menuSpace, the gap kept for it beside the content). The logo sits above the
    list. The list's first item sits level with the middle of the first line
    of the home page's headline (see .hero and .headline in Landing.module.css,
    and move this with them). */
-.menu {
-  position: sticky;
-  top: 128px; /* the same as its margin, so it never moves as the page scrolls */
-  align-self: flex-start;
+.menu,
+.menuSpace {
   flex: none;
   width: 184px;
+}
+
+.menu {
+  align-self: flex-start;
   margin: 128px 0 0;
   display: flex;
   flex-direction: column;
@@ -168,16 +212,19 @@
   color: var(--text);
 }
 
-/* The sign-in link: a column of its own to the right of the content, sticky
+/* The sign-in link: a column of its own to the right of the content, pinned
    like the menu, so it is always in reach and nothing scrolls underneath it.
    The width is fixed so the content doesn't shift when its label changes. */
-.corner {
-  position: sticky;
-  top: 18px;
-  align-self: flex-start;
+.corner,
+.cornerSpace {
   flex: none;
   width: 84px;
-  margin: 18px 0 0 var(--space-8);
+  margin-left: var(--space-8);
+}
+
+.corner {
+  align-self: flex-start;
+  margin-top: 18px;
   text-align: right;
   white-space: nowrap;
 }
@@ -219,13 +266,29 @@
 /* Narrow screens: no room for the menu beside the content, so it goes on top
    and scrolls away with the page. */
 @media (max-width: 1000px) {
+  /* The whole page scrolls as one here, menu included. */
+  .page {
+    flex-direction: column;
+  }
+
+  .pinned {
+    position: relative;
+    display: block;
+    pointer-events: auto;
+  }
+
   .frame {
     flex-direction: column;
     padding-inline: var(--space-6);
   }
 
+  .menuSpace,
+  .cornerSpace,
+  .between {
+    display: none;
+  }
+
   .menu {
-    position: static;
     width: auto;
     margin-top: 52px;
   }
