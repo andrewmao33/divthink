@@ -8,6 +8,8 @@
     <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- The colour phones give the browser bar: the page's own background. -->
+    <meta name="theme-color" content="#1d1b18" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&display=swap" rel="stylesheet" />
@@ -49,18 +51,23 @@
     />
     <link rel="canonical" href="https://divthink.com/" />
 
-    <!-- Link previews. summary rather than summary_large_image until there is a
-         real og:image: a large card with no picture looks broken, a small one
-         doesn't. -->
+    <!-- Link previews: the title, description and picture a link to the site
+         shows on X, iMessage, Slack and the like. The picture's address must be
+         a full one; those services don't resolve a bare path. -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://divthink.com/" />
     <meta property="og:site_name" content="Divthink" />
     <meta property="og:title" content="Divthink: conversations that branch instead of scrolling" />
     <meta
       property="og:description"
-      content="A canvas for conversations that branch instead of scrolling."
+      content="Branch from any reply, keep threads side by side, and merge them back."
     />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image" content="https://divthink.com/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="The Divthink logo, a line drawing of a head, beside the name Divthink." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://divthink.com/og.jpg" />
 
     <!-- Tells search engines what the site is called, so results show
          "Divthink" above the link instead of the bare address. -->
