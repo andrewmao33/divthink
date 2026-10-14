@@ -1,7 +1,8 @@
 """Plans and what each allows. The plan is set on users.plan; Stripe will set it
 once payments exist, and until then it is changed by hand in the SQL editor.
 
-Limits stop new things being made, never take away what exists: an account
+Limits stop new things being made, never take away what exists (402, which the
+browser answers with an Upgrade button): an account
 already over a limit keeps everything, and can read and delete as before.
 """
 
@@ -39,10 +40,10 @@ async def check_new_canvas(conn: asyncpg.Connection | asyncpg.Pool, user_id: UUI
     count = await conn.fetchval("SELECT count(*) FROM sessions WHERE user_id = $1", user_id)
     if count >= plan.canvases:
         raise HTTPException(
-            status_code=403,
+            status_code=402,
             detail=(
                 f"The {plan.label} plan has room for {plan.canvases} canvases. "
-                "Delete one to start another, or upgrade in Settings → Billing."
+                "Delete one to start another, or upgrade to Pro."
             ),
         )
 
@@ -57,10 +58,10 @@ async def check_new_card(conn: asyncpg.Connection, user_id: UUID, session_id: UU
     )
     if count >= plan.cards_per_canvas:
         raise HTTPException(
-            status_code=403,
+            status_code=402,
             detail=(
                 f"This canvas is full: the {plan.label} plan has room for "
                 f"{plan.cards_per_canvas} cards per canvas. Start a new canvas, "
-                "or upgrade in Settings → Billing."
+                "or upgrade to Pro."
             ),
         )

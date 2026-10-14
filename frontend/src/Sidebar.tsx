@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { listSessions, renameSession, type Session } from './api'
+import { getAccount, listSessions, renameSession, type Account, type Session } from './api'
 import { authEnabled } from './auth'
 import ContextMenu, { type MenuItem } from './ContextMenu'
 import styles from './Sidebar.module.css'
@@ -76,6 +76,25 @@ function Sidebar({ children }: { children: React.ReactNode }) {
   }
   const [sessions, setSessions] = useState<Session[] | null>(null)
   const [failed, setFailed] = useState(false)
+  // The plan, for the line above Settings. Fetched each time the drawer opens,
+  // so a fresh upgrade or a new canvas shows.
+  const [account, setAccount] = useState<Account | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    getAccount().then(
+      (a) => {
+        if (!cancelled) setAccount(a)
+      },
+      () => {
+        // Leave the line out rather than show a wrong plan.
+      },
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [open])
 
   // Refetched whenever the open canvas or its title changes, so a new canvas
   // appears immediately and a title set by the first prompt updates in place.
@@ -265,6 +284,31 @@ function Sidebar({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className={styles.footer}>
+              {account && (
+                <div className={styles.plan}>
+                  <span className={styles.planText}>
+                    {account.plan_label} plan
+                    {account.canvas_limit !== null && (
+                      <span className={styles.planUsage}>
+                        {' '}
+                        · {account.canvases} of {account.canvas_limit} canvases
+                      </span>
+                    )}
+                  </span>
+                  {account.plan === 'free' && (
+                    <button
+                      type="button"
+                      className={styles.planUpgrade}
+                      onClick={() => {
+                        setOpen(false)
+                        openSettings('billing')
+                      }}
+                    >
+                      Upgrade
+                    </button>
+                  )}
+                </div>
+              )}
               <button
                 type="button"
                 className={styles.footerItem}

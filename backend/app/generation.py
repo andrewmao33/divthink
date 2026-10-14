@@ -152,7 +152,6 @@ async def _generate(
                 """,
                 assistant_node_id, reply, metadata,
             )
-            await _write_title(session_id, assistant_node_id, reply, model, api_key)
             events.publish(session_id, "done", {
                 "node_id": node,
                 "content": reply,
@@ -160,6 +159,11 @@ async def _generate(
                 "thinking_seconds": metadata.get("thinking_seconds"),
                 "usage": metadata.get("usage"),
             })
+            events.end_reply(session_id, node)  # straight after done, as in `finally`
+            # The title is a second, small model call. It comes after "done" so the
+            # finished reply doesn't look unfinished while it runs; it arrives on
+            # its own "titled" event. Never raises.
+            await _write_title(session_id, assistant_node_id, reply, model, api_key)
         except Exception as e:
             if isinstance(e, ProviderError):
                 reason = str(e)

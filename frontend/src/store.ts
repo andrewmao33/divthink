@@ -71,6 +71,8 @@ type CanvasState = {
   sending: boolean
   // One-line message above the chat box: a failed send, a refused delete, …
   notice: string | null
+  // The notice, when it is a plan limit: the chat box offers Upgrade beside it.
+  limitNotice: string | null
   pendingDelete: PendingDelete | null
   // The public demo: everything that writes is refused, and there is no stream.
   readOnly: boolean
@@ -163,6 +165,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   model: null,
   sending: false,
   notice: null,
+  limitNotice: null,
   pendingDelete: null,
   readOnly: false,
   unsaved: false,
@@ -445,6 +448,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
         focus: before.activeId ? { id: before.activeId } : null,
         sending: false,
         notice: messageFor(e),
+        limitNotice: e instanceof ApiError && e.status === 402 ? messageFor(e) : null,
       }))
       return false
     }

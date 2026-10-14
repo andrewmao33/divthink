@@ -24,6 +24,7 @@ function Composer({ active, merging }: Props) {
     images,
     sending,
     notice,
+    limitNotice,
     pendingDelete,
     models,
     model,
@@ -45,6 +46,7 @@ function Composer({ active, merging }: Props) {
       images: s.images,
       sending: s.sending,
       notice: s.notice,
+      limitNotice: s.limitNotice,
       pendingDelete: s.pendingDelete,
       models: s.models,
       model: s.model,
@@ -152,7 +154,16 @@ function Composer({ active, merging }: Props) {
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
     >
-      {notice && <p className={styles.error}>{notice}</p>}
+      {notice && notice === limitNotice ? (
+        <div className={styles.limit}>
+          <p className={styles.limitText}>{notice}</p>
+          <button type="button" className={styles.upgrade} onClick={() => openSettings('billing')}>
+            Upgrade
+          </button>
+        </div>
+      ) : (
+        notice && <p className={styles.error}>{notice}</p>
+      )}
 
       {pendingDelete ? (
         <div className={styles.status}>
