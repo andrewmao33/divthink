@@ -7,6 +7,7 @@ CREATE TABLE users (
   google_sub  text UNIQUE,
   auto_branch boolean NOT NULL DEFAULT true,
   plan        text NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'pro_max')),
+  stripe_customer_id text UNIQUE,  -- set when they first go to checkout
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 

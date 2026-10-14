@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     # Browser origins allowed to call the API directly, comma-separated.
     cors_origins: str = "http://localhost:5173"
 
+    # Payments (Stripe). Empty = payments off: the Upgrade button says so.
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""  # whsec_..., from the webhook endpoint in Stripe
+    stripe_price_pro: str = ""  # price_..., the Pro plan's monthly price
+    # Where Stripe sends people back to after paying or managing their plan.
+    app_url: str = "http://localhost:5173"
+
     # Local development only: provider keys for the dev user when none are saved.
     anthropic_api_key: str = ""
     openai_api_key: str = ""
@@ -28,6 +35,10 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
+
+    @property
+    def payments_enabled(self) -> bool:
+        return bool(self.stripe_secret_key and self.stripe_webhook_secret and self.stripe_price_pro)
 
     @property
     def auth_enabled(self) -> bool:

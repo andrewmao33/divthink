@@ -38,3 +38,7 @@ export function onLinkClick(event: MouseEvent<HTMLAnchorElement>): void {
   const url = new URL(event.currentTarget.href)
   navigate(url.pathname + url.hash)
 }
+
+// Where Stripe sent the browser back from (?billing=success, cancelled or
+// managed), read once when the app loads, before the canvas rewrites the address.
+export const billingReturn: string | null = new URLSearchParams(window.location.search).get('billing')

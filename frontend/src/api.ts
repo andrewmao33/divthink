@@ -245,8 +245,21 @@ export type Account = {
   canvas_limit: number | null // null = unlimited
   card_limit: number | null // per canvas
   month_cost_usd: number // this month's replies, whoever's key paid
+  payments_enabled: boolean // Stripe is set up, so Upgrade works
+  has_subscription: boolean // Manage subscription works
 }
 
 export function getAccount(): Promise<Account> {
   return request('/account')
+}
+
+// Upgrading: a Stripe Checkout session, shown inside Billing by Stripe.js.
+export function startCheckout(): Promise<{ client_secret: string }> {
+  return request('/billing/checkout', { method: 'POST' })
+}
+
+// Managing a subscription: Stripe's own page; the browser goes there.
+
+export function openBillingPortal(): Promise<{ url: string }> {
+  return request('/billing/portal', { method: 'POST' })
 }

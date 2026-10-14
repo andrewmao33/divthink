@@ -320,6 +320,29 @@
   color: var(--color-text-muted);
 }
 
+/* Stripe's payment form. Stripe draws it on its own background (set under
+   Branding in the Stripe Dashboard), so it gets a frame of its own. */
+.checkout {
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  min-height: 420px;
+}
+
+.back {
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.back:hover {
+  color: var(--color-text);
+}
+
 /* Phones: the sections become a row of tabs above the content. */
 @media (max-width: 600px) {
   .window {

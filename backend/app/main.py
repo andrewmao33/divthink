@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from . import db
 from .config import settings
-from .routes import account, generate, keys, models, nodes, public, sessions, stream
+from .routes import account, billing, generate, keys, models, nodes, public, sessions, stream
 
 log = logging.getLogger(__name__)
 
@@ -66,6 +66,7 @@ app.include_router(nodes.router)
 app.include_router(models.router)
 app.include_router(public.router)
 app.include_router(account.router)
+app.include_router(billing.router)
 
 
 @app.get("/health")

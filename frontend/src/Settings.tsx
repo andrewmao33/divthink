@@ -1,7 +1,18 @@
 import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { deleteAccount, deleteKey, getAccount, listKeys, saveKey, type Account, type KeyStatus } from './api'
+import {
+  deleteAccount,
+  deleteKey,
+  getAccount,
+  listKeys,
+  openBillingPortal,
+  saveKey,
+  type Account,
+  type KeyStatus,
+} from './api'
 import { authEnabled, signOut, supabase } from './auth'
+import Checkout from './Checkout'
+import { billingReturn } from './nav'
 import styles from './Settings.module.css'
 import { logOut, useCanvasStore, type SettingsSection } from './store'
 
@@ -295,6 +306,9 @@ function KeyRow({ status, onChange }: { status: KeyStatus; onChange: () => Promi
   )
 }
 
+// Whether this build can take payments at all (the server has to agree too).
+const checkoutAvailable = Boolean(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY)
+
 const PLAN_OPTIONS: { id: Account['plan']; label: string; price: string; points: string[] }[] = [
   { id: 'free', label: 'Free', price: '$0', points: ['Your own API key', '5 canvases', '50 cards per canvas'] },
   { id: 'pro', label: 'Pro', price: '$8 a month', points: ['Your own API key', 'Unlimited canvases', 'Unlimited cards'] },
@@ -309,30 +323,77 @@ const PLAN_OPTIONS: { id: Account['plan']; label: string; price: string; points:
 function Billing() {
   const [account, setAccount] = useState<Account | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [checkingOut, setCheckingOut] = useState(false)
+  // Just paid: Stripe tells the server a moment later, so the plan is checked
+  // again a few times until it shows.
+  const [waiting, setWaiting] = useState(billingReturn === 'success')
 
   useEffect(() => {
     let cancelled = false
-    getAccount().then(
-      (a) => {
-        if (!cancelled) setAccount(a)
-      },
-      (e: unknown) => {
+    let tries = 0
+    async function load() {
+      try {
+        const a = await getAccount()
+        if (cancelled) return
+        setAccount(a)
+        if (waiting && a.plan === 'free' && tries++ < 10) setTimeout(() => void load(), 2000)
+        else setWaiting(false)
+      } catch (e) {
         if (!cancelled) setError(messageOf(e))
-      },
-    )
+      }
+    }
+    void load()
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [waiting])
 
-  if (error) return <p className={styles.error}>{error}</p>
-  if (!account) return <p className={styles.muted}>Loading…</p>
+  async function manage() {
+    setBusy(true)
+    setError(null)
+    try {
+      window.location.assign((await openBillingPortal()).url)
+    } catch (e) {
+      setError(messageOf(e))
+      setBusy(false)
+    }
+  }
+
+  if (!account) return error ? <p className={styles.error}>{error}</p> : <p className={styles.muted}>Loading…</p>
+
+  if (checkingOut) {
+    return (
+      <>
+        <button type="button" className={styles.back} onClick={() => setCheckingOut(false)}>
+          ← Back to plans
+        </button>
+        <Checkout
+          onComplete={() => {
+            setCheckingOut(false)
+            setWaiting(true)
+          }}
+        />
+      </>
+    )
+  }
+
+  const canPay = account.payments_enabled && checkoutAvailable
 
   return (
     <>
+      {waiting && <p className={styles.intro}>Payment received. Switching you to Pro…</p>}
+      {error && <p className={styles.error}>{error}</p>}
       <div className={styles.row}>
         <p className={styles.rowTitle}>Plan</p>
-        <span className={styles.value}>{account.plan_label}</span>
+        <div className={styles.actions}>
+          <span className={styles.value}>{account.plan_label}</span>
+          {account.has_subscription && account.payments_enabled && account.plan !== 'free' && (
+            <button type="button" className={styles.secondary} disabled={busy} onClick={() => void manage()}>
+              Manage subscription
+            </button>
+          )}
+        </div>
       </div>
       <div className={styles.row}>
         <p className={styles.rowTitle}>Canvases</p>
@@ -350,9 +411,7 @@ function Billing() {
         <div>
           <p className={styles.rowTitle}>Spent this month</p>
           <p className={styles.rowHint}>
-            {account.plan === 'pro_max'
-              ? 'Model use included in your plan.'
-              : 'Charged by Anthropic or Google to your own API key. An estimate from their list prices.'}
+            Charged by Anthropic or Google to your own API key. An estimate from their list prices.
           </p>
         </div>
         <span className={styles.value}>${account.month_cost_usd.toFixed(2)}</span>
@@ -376,9 +435,15 @@ function Billing() {
             ) : option.id === 'pro_max' ? (
               <span className={styles.muted}>Coming soon</span>
             ) : (
-              option.id === 'pro' && (
-                // Until payments are set up.
-                <button type="button" className={styles.secondary} disabled>
+              option.id === 'pro' &&
+              account.plan === 'free' && (
+                <button
+                  type="button"
+                  className={styles.primary}
+                  disabled={!canPay}
+                  title={canPay ? undefined : 'Payments are coming soon'}
+                  onClick={() => setCheckingOut(true)}
+                >
                   Upgrade
                 </button>
               )

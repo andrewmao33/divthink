@@ -28,6 +28,7 @@ import { isEditing } from './dom'
 import type { CardLayout } from './api'
 import { ancestorIds, exchangesOf, threads } from './exchanges'
 import { CARD_WIDTH, layout, type Point, type Size } from './layout'
+import { billingReturn } from './nav'
 import Panel, { PANEL_MAX, PANEL_MIN } from './Panel'
 import Settings from './Settings'
 import Sidebar from './Sidebar'
@@ -150,6 +151,8 @@ function Canvas({ demoId, embedded = false }: Props) {
     }
     void loadSession(canvasIdInAddress())
     void loadModels()
+    // Back from Stripe: show how it went.
+    if (billingReturn) useCanvasStore.getState().openSettings('billing')
   }, [embedded, demoId, loadPublicSession, loadSession, loadModels, loadDemo])
 
   // Keep the open canvas in the URL, so refreshing reopens it. A new canvas
