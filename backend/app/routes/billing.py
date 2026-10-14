@@ -1,8 +1,8 @@
 """Paying for Pro, through Stripe.
 
-Upgrade opens Stripe's embedded Checkout inside Settings → Billing (Stripe's own
-form in a frame, on divthink.com); Manage sends the browser to Stripe's customer
-portal (change card, cancel). Neither changes the plan itself: Stripe
+Upgrade opens Divthink's own checkout screen, with Stripe's payment fields in it
+(Checkout Sessions in "elements" mode); Manage sends the browser to Stripe's
+customer portal (change card, cancel). Neither changes the plan itself: Stripe
 tells the webhook what happened, and the webhook is the only thing that sets
 users.plan from a payment. Card details never reach this server.
 """
@@ -30,8 +30,8 @@ class Redirect(BaseModel):
     url: str
 
 
-class EmbeddedCheckout(BaseModel):
-    client_secret: str  # Stripe.js mounts the form with it
+class CheckoutSession(BaseModel):
+    client_secret: str  # Stripe.js draws the payment fields with it
 
 
 def _client() -> stripe.StripeClient:
@@ -44,9 +44,9 @@ def _settings_url(result: str) -> str:
     return f"{settings.app_url.rstrip('/')}/?billing={result}"
 
 
-@router.post("/checkout", response_model=EmbeddedCheckout)
+@router.post("/checkout", response_model=CheckoutSession)
 async def checkout(user_id: UUID = Depends(current_user)):
-    """An embedded Stripe Checkout for Pro."""
+    """A Stripe Checkout session for Pro, for the checkout screen to complete."""
     client = _client()
     row = await get_pool().fetchrow(
         "SELECT email, plan, stripe_customer_id FROM users WHERE id = $1", user_id
@@ -57,13 +57,12 @@ async def checkout(user_id: UUID = Depends(current_user)):
     try:
         session = await client.v1.checkout.sessions.create_async(params={
             "mode": "subscription",
-            "ui_mode": "embedded_page",
+            "ui_mode": "elements",
             "customer": customer_id,
             "client_reference_id": str(user_id),
             "line_items": [{"price": settings.stripe_price_pro, "quantity": 1}],
-            # Cards finish in place (the page's onComplete); only a payment method
-            # that has to leave for its bank comes back through this address.
-            "redirect_on_completion": "if_required",
+            # Cards finish in place; only a payment method that has to leave for
+            # its bank comes back through this address.
             "return_url": _settings_url("success"),
             "allow_promotion_codes": True,
             # Stripe's merchant-of-record service (it handles sales tax for a
@@ -74,7 +73,7 @@ async def checkout(user_id: UUID = Depends(current_user)):
     except stripe.StripeError:
         log.exception("could not start checkout for %s", user_id)
         raise HTTPException(status_code=502, detail="Couldn't reach Stripe. Try again.")
-    return EmbeddedCheckout(client_secret=session.client_secret)
+    return CheckoutSession(client_secret=session.client_secret)
 
 
 async def _new_customer(client: stripe.StripeClient, user_id: UUID, email: str) -> str:

@@ -362,26 +362,19 @@ function Billing() {
 
   if (!account) return error ? <p className={styles.error}>{error}</p> : <p className={styles.muted}>Loading…</p>
 
-  if (checkingOut) {
-    return (
-      <>
-        <button type="button" className={styles.back} onClick={() => setCheckingOut(false)}>
-          ← Back to plans
-        </button>
+  const canPay = account.payments_enabled && checkoutAvailable
+
+  return (
+    <>
+      {checkingOut && (
         <Checkout
+          onClose={() => setCheckingOut(false)}
           onComplete={() => {
             setCheckingOut(false)
             setWaiting(true)
           }}
         />
-      </>
-    )
-  }
-
-  const canPay = account.payments_enabled && checkoutAvailable
-
-  return (
-    <>
+      )}
       {waiting && <p className={styles.intro}>Payment received. Switching you to Pro…</p>}
       {error && <p className={styles.error}>{error}</p>}
       <div className={styles.row}>
