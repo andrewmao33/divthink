@@ -95,6 +95,16 @@
   color: var(--color-text);
 }
 
+/* A new canvas's name: shown, but not editable until the canvas is saved. */
+span.canvasName {
+  cursor: default;
+}
+
+span.canvasName:hover {
+  background: none;
+  color: var(--color-text-soft);
+}
+
 .canvasInput {
   min-width: 0;
   width: 220px;

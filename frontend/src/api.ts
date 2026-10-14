@@ -227,3 +227,8 @@ export function saveKey(provider: string, key: string): Promise<void> {
 export function deleteKey(provider: string): Promise<void> {
   return request(`/keys/${encodeURIComponent(provider)}`, { method: 'DELETE' })
 }
+
+// Deletes the signed-in account and everything in it, including the login.
+export function deleteAccount(): Promise<void> {
+  return request('/account', { method: 'DELETE' })
+}

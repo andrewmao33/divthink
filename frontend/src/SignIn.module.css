@@ -1,0 +1,207 @@
+/* The sign-in page: one narrow column inside the site frame. Uses the colour
+   variables SiteShell sets on the page. The heading starts where the home
+   page's headline does, level with the menu. */
+
+.page {
+  max-width: 360px;
+  padding: 146px 0 200px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  font-weight: 400;
+  line-height: 40px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.note {
+  margin: var(--space-3) 0 40px;
+  font-size: var(--text-sm);
+  line-height: 20px;
+  color: var(--text-soft);
+}
+
+.address {
+  font-weight: 500;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* ---- Buttons and fields ----------------------------------------------------- */
+
+.google,
+.primary,
+.input {
+  width: 100%;
+  height: 42px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.google,
+.primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    opacity 0.15s;
+}
+
+.google {
+  border: 1px solid #ffffff2e;
+  background: #ffffff0a;
+  color: var(--text);
+}
+
+.google:hover:not(:disabled) {
+  border-color: #ffffff47;
+  background: #ffffff14;
+}
+
+/* The one filled button on the page: what the form is for. */
+.primary {
+  margin-top: var(--space-3);
+  border: 0;
+  background: var(--text);
+  font-weight: 500;
+  color: var(--bg);
+}
+
+.primary:hover:not(:disabled) {
+  background: #ffffff;
+}
+
+.google:disabled,
+.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* "or", on a hairline that runs either side of it. */
+.or {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 28px 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.or::before,
+.or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+}
+
+.label {
+  margin-bottom: var(--space-2);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.input {
+  padding: 0 14px;
+  border: 1px solid #ffffff1f;
+  background: #00000033;
+  color: var(--text);
+  transition: border-color 0.15s;
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+.input:focus {
+  outline: none;
+  border-color: #ffffff59;
+}
+
+/* The code reads as digits to compare against the email, so space them out. */
+.code {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  letter-spacing: 0.3em;
+}
+
+.google:focus-visible,
+.primary:focus-visible,
+.link:focus-visible,
+.fine a:focus-visible {
+  outline: 1px solid var(--text);
+  outline-offset: 3px;
+}
+
+/* ---- After the code is sent --------------------------------------------------- */
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: 20px;
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.link:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.link:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+/* ---- Messages ------------------------------------------------------------------ */
+
+.error {
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-sm);
+  line-height: 20px;
+  color: var(--error);
+}
+
+.fine {
+  margin: 40px 0 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.fine a {
+  color: var(--text-soft);
+  text-underline-offset: 3px;
+}
+
+.fine a:hover {
+  color: var(--text);
+}
+
+@media (max-width: 1000px) {
+  .page {
+    padding: 72px 0 120px;
+  }
+}

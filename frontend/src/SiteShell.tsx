@@ -5,7 +5,7 @@ import styles from './SiteShell.module.css'
 
 const GITHUB_URL = 'https://github.com/andrewmao33/divthink'
 
-export type Page = 'home' | 'method' | 'pricing' | 'faq' | 'privacy'
+export type Page = 'home' | 'method' | 'pricing' | 'faq' | 'privacy' | 'sign-in'
 
 // The menu, top-left on every page. All four are parts of the home page: the
 // top of it, then sections further down. The footer repeats all but the first.
@@ -16,10 +16,10 @@ const PAGES: { page: Page; href: string; label: string }[] = [
   { page: 'faq', href: '/#faq', label: 'FAQ' },
 ]
 
-// The frame around every public page: the menu top-left, "Get started"
+// The frame around every public page: the menu top-left, "Sign in"
 // top-right and the footer stay put, and the page itself goes in between.
 function SiteShell({ current, children }: { current: Page; children?: ReactNode }) {
-  const { busy, error, start } = useGetStarted()
+  const { start } = useGetStarted()
 
   // The window behind the page is light for the canvas and dark for these pages
   // (index.html, "site-dark"). index.html guesses which before anything loads;
@@ -34,12 +34,14 @@ function SiteShell({ current, children }: { current: Page; children?: ReactNode 
       {/* What shows in the gap when the page bounces past its top or bottom. */}
       <div className={styles.backdrop} />
 
-      {/* The menu and "Get started" are fixed to the window, not part of what
+      {/* The menu and "Sign in" are fixed to the window, not part of what
           scrolls, so they hold still even while the page bounces. */}
       <div className={styles.pinned}>
         <div className={styles.frame}>
           <nav className={styles.menu} aria-label="Main">
-            <img className={styles.mark} src="/logo.svg" alt="" />
+            <a className={styles.markLink} href="/" onClick={onLinkClick} aria-label="Home">
+              <img className={styles.mark} src="/logo.svg" alt="" />
+            </a>
             <ul className={styles.menuList}>
               {PAGES.map(({ page, href, label }) => (
                 <li key={page}>
@@ -58,11 +60,12 @@ function SiteShell({ current, children }: { current: Page; children?: ReactNode 
 
           <div className={styles.between} />
 
+          {/* Signing in and signing up are the same step (Google or an emailed
+              code), so one button covers both. */}
           <div className={styles.corner}>
-            <button type="button" className={styles.start} onClick={start} disabled={busy}>
-              {busy ? 'Redirecting…' : 'Get started'}
+            <button type="button" className={styles.signIn} onClick={start}>
+              Sign in
             </button>
-            {error && <p className={styles.error}>{error}</p>}
           </div>
         </div>
       </div>

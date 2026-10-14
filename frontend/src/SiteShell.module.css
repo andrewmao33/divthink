@@ -184,6 +184,16 @@
 
 /* The drawing has its own margin inside the file, so the head itself comes out
    around 16px tall: level with the first link's 20px line. */
+.markLink {
+  display: flex;
+  flex: none;
+}
+
+.markLink:focus-visible {
+  outline: 1px solid var(--text);
+  outline-offset: 4px;
+}
+
 .mark {
   flex: none;
   width: 20px;
@@ -212,13 +222,13 @@
   color: var(--text);
 }
 
-/* The sign-in link: a column of its own to the right of the content, pinned
-   like the menu, so it is always in reach and nothing scrolls underneath it.
-   The width is fixed so the content doesn't shift when its label changes. */
+/* "Sign in" and "Get started": a column of their own to the right of the
+   content, pinned like the menu, so they are always in reach and nothing
+   scrolls underneath them. The width is fixed, just wide enough for the two. */
 .corner,
 .cornerSpace {
   flex: none;
-  width: 84px;
+  width: 140px;
   margin-left: var(--space-8);
 }
 
@@ -229,7 +239,7 @@
   white-space: nowrap;
 }
 
-.start {
+.signIn {
   padding: 0;
   border: 0;
   background: none;
@@ -241,26 +251,15 @@
   transition: color 0.15s;
 }
 
-.start:hover:not(:disabled) {
+.signIn:hover {
   color: var(--text);
-}
-
-.start:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 .menuLink:focus-visible,
 .footerLinks a:focus-visible,
-.start:focus-visible {
+.signIn:focus-visible {
   outline: 1px solid var(--text);
   outline-offset: 4px;
-}
-
-.error {
-  margin: var(--space-2) 0 0;
-  font-size: var(--text-sm);
-  color: var(--error);
 }
 
 /* Narrow screens: no room for the menu beside the content, so it goes on top

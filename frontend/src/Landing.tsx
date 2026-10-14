@@ -49,7 +49,7 @@ const FAQ: [string, string][] = [
   ],
   [
     'Do I need an API key?',
-    'Yes. After signing in with Google you add an Anthropic key, a Google key, or both. A model is available once its provider has a key.',
+    'Yes. After signing in you add an Anthropic key, a Google key, or both. A model is available once its provider has a key.',
   ],
   [
     'Is my API key safe?',
@@ -65,14 +65,14 @@ const FAQ: [string, string][] = [
   ],
   [
     'Can I delete my data?',
-    'You can delete a whole canvas, or any card that nothing continues from, and remove a saved key at any time. To delete your account and everything in it, see the Privacy Policy.',
+    'You can delete a whole canvas, or any card that nothing continues from, and remove a saved key at any time. To delete your account and everything in it, go to Settings → Account.',
   ],
 ]
 
 // The signed-out home page: one long page of sections, which the menu scrolls
 // between and follows.
 function Landing() {
-  const { busy, error, start } = useGetStarted()
+  const { start } = useGetStarted()
   const [current, setCurrent] = useState<Page>('home')
 
   // Arriving at an address that names a section (divthink.com/#pricing): the
@@ -110,14 +110,13 @@ function Landing() {
           Divthink lets you branch from any reply, keep threads side by side, and merge them back.
         </p>
         <div className={styles.actions}>
-          <button type="button" className={styles.action} onClick={start} disabled={busy}>
-            {busy ? 'Redirecting…' : 'Get started'}
+          <button type="button" className={styles.action} onClick={start}>
+            Get started
           </button>
           <a className={`${styles.action} ${styles.actionQuiet}`} href="/#method" onClick={onLinkClick}>
             Read the method
           </a>
         </div>
-        {error && <p className={styles.error}>{error}</p>}
       </section>
 
       {/* The app itself, on a built-in example (demo.ts): click around it, drag

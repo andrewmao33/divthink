@@ -1,22 +1,23 @@
 import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { listSessions, renameSession, type Session } from './api'
-import { authEnabled, signOut } from './auth'
+import { authEnabled } from './auth'
 import ContextMenu, { type MenuItem } from './ContextMenu'
 import styles from './Sidebar.module.css'
-import { resetCanvas, useCanvasStore } from './store'
+import { logOut, useCanvasStore } from './store'
 
 // The bar in the top-left corner, naming the open canvas, and the drawer it
 // opens: your other canvases and the account actions. Closed until asked for,
 // because the canvas is the point.
 function Sidebar({ children }: { children: React.ReactNode }) {
-  const { session, loadSession, newSession, openKeys, renameCanvas, deleteCanvas } = useCanvasStore(
+  const { session, unsaved, loadSession, newSession, openSettings, renameCanvas, deleteCanvas } = useCanvasStore(
     useShallow((s) => ({
       deleteCanvas: s.deleteCanvas,
       session: s.session,
+      unsaved: s.unsaved,
       loadSession: s.loadSession,
       newSession: s.newSession,
-      openKeys: s.openKeys,
+      openSettings: s.openSettings,
       renameCanvas: s.renameCanvas,
     })),
   )
@@ -127,7 +128,10 @@ function Sidebar({ children }: { children: React.ReactNode }) {
         {session && (
           <>
             <span className={styles.slash}>/</span>
-            {draft === null ? (
+            {unsaved ? (
+              // Nothing to rename until the first prompt saves it.
+              <span className={styles.canvasName}>New canvas</span>
+            ) : draft === null ? (
               <button
                 type="button"
                 className={styles.canvasName}
@@ -266,23 +270,14 @@ function Sidebar({ children }: { children: React.ReactNode }) {
                 className={styles.footerItem}
                 onClick={() => {
                   setOpen(false)
-                  openKeys()
+                  openSettings()
                 }}
               >
-                API keys
+                Settings
               </button>
               {authEnabled && (
-                <button
-                  type="button"
-                  className={styles.footerItem}
-                  onClick={() => {
-                    resetCanvas()
-                    // Back to the plain address: the canvas in it isn't theirs to see any more.
-                    window.history.replaceState(null, '', '/')
-                    void signOut()
-                  }}
-                >
-                  Sign out
+                <button type="button" className={styles.footerItem} onClick={logOut}>
+                  Log out
                 </button>
               )}
             </div>

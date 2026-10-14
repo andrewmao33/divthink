@@ -39,7 +39,7 @@
   cursor: pointer;
 }
 
-.demoLink:hover:not(:disabled) {
+.demoLink:hover {
   color: var(--color-accent-hover);
 }
 

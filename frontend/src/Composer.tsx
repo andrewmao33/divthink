@@ -32,7 +32,7 @@ function Composer({ active, merging }: Props) {
     confirmDelete,
     cancelDelete,
     setModel,
-    openKeys,
+    openSettings,
     addImages,
     removeImage,
   } = useCanvasStore(
@@ -51,7 +51,7 @@ function Composer({ active, merging }: Props) {
       confirmDelete: s.confirmDelete,
       cancelDelete: s.cancelDelete,
       setModel: s.setModel,
-      openKeys: s.openKeys,
+      openSettings: s.openSettings,
       addImages: s.addImages,
       removeImage: s.removeImage,
     })),
@@ -162,7 +162,7 @@ function Composer({ active, merging }: Props) {
       ) : needsKey ? (
         <div className={styles.status}>
           <span className={styles.statusText}>Add your API key to start.</span>
-          <button type="button" className={styles.textButton} onClick={openKeys}>
+          <button type="button" className={styles.textButton} onClick={() => openSettings('keys')}>
             Add key
           </button>
         </div>

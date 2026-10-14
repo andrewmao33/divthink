@@ -56,13 +56,8 @@
   transition: color 0.15s;
 }
 
-.action:hover:not(:disabled) {
+.action:hover {
   color: var(--accent);
-}
-
-.action:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 .actionQuiet {
@@ -70,7 +65,7 @@
   color: var(--text-muted);
 }
 
-.actionQuiet:hover:not(:disabled) {
+.actionQuiet:hover {
   color: var(--text);
 }
 
@@ -79,21 +74,16 @@
   outline-offset: 4px;
 }
 
-.error {
-  margin: var(--space-4) 0 0;
-  font-size: var(--text-sm);
-  color: var(--error);
-}
-
 /* ---- Demo ------------------------------------------------------------------ */
 
 /* A window onto the app, as wide as the content area. */
 .demo {
   position: relative;
-  /* The rest of the first screen under the hero, less a margin at the bottom,
-     so the whole demo is in view without scrolling. */
-  height: min(760px, calc(100vh - 392px - 28px));
-  min-height: 480px;
+  /* One shape on every screen: the 1056 × 760 it has on a large monitor,
+     scaled down with the column. On a laptop that runs it past the bottom of
+     the first screen, which is better than squashing it into a wide strip. */
+  aspect-ratio: 1056 / 760;
+  min-height: 480px; /* phones: tall enough to use */
   margin-bottom: 200px;
   overflow: hidden;
   border: 1px solid var(--rule);
@@ -275,6 +265,11 @@
 /* ---- Narrow screens -------------------------------------------------------- */
 
 @media (max-width: 1000px) {
+  /* The demo no longer has to fit under the hero here, so the line can wrap. */
+  .lede {
+    white-space: normal;
+  }
+
   .hero {
     min-height: 0;
     padding: 72px 0 96px;

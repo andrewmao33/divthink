@@ -4,6 +4,7 @@ import Canvas from './Canvas'
 import Landing from './Landing'
 import { currentPath } from './nav'
 import Privacy from './Privacy'
+import SignIn from './SignIn'
 import { resetCanvas } from './store'
 
 // A public canvas, readable with no account: divthink.com/?demo=<session id>
@@ -39,7 +40,10 @@ function App() {
   if (demoId) return <Canvas demoId={demoId} /> // public canvas, no sign-in
   if (!authEnabled) return <Canvas /> // local development without sign-in
   if (session === undefined) return null
-  return session ? <Canvas /> : <Landing />
+  // Signed in, the canvas shows at any address, /sign-in included; it puts
+  // its own address in the bar.
+  if (session) return <Canvas />
+  return path === '/sign-in' ? <SignIn /> : <Landing />
 }
 
 export default App

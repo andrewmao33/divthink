@@ -1,0 +1,314 @@
+/* The settings window: sections listed on the left, the open one on the right. */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: #00000066;
+}
+
+.window {
+  border-radius: var(--radius);
+  display: flex;
+  width: min(760px, 100%);
+  height: min(560px, calc(100vh - 2 * var(--space-4)));
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: 0 8px 40px #0000004d;
+}
+
+.nav {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 200px;
+  padding: var(--space-4) var(--space-3);
+  border-right: 1px solid var(--color-border);
+}
+
+.navLabel {
+  margin: 0 0 var(--space-2) var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.navItem {
+  border-radius: var(--radius-sm);
+  padding: 6px var(--space-2);
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.navItem:hover,
+.navItem:focus-visible {
+  outline: none;
+  background: var(--hover-tint);
+  color: var(--color-text);
+}
+
+.navCurrent {
+  background: var(--hover-tint);
+  color: var(--color-text);
+}
+
+.content {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--space-6) var(--space-8) var(--space-8);
+}
+
+.close {
+  border-radius: var(--radius-sm);
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.close:hover,
+.close:focus-visible {
+  outline: none;
+  background: var(--hover-tint);
+  color: var(--color-text);
+}
+
+.title {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-lg);
+  font-weight: 500;
+}
+
+.intro {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-text-soft);
+}
+
+/* One setting: its name and hint on the left, the control on the right. */
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-4) 0;
+}
+
+.row + .row {
+  border-top: 1px solid var(--color-border);
+}
+
+.rowTitle {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.rowHint {
+  margin: 2px 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.intro a,
+.rowHint a,
+.help a {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.muted {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.saved {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.select,
+.input {
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-bg);
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+/* Like claude.ai's pickers: just the value and a chevron, a faint fill on hover. */
+.select {
+  flex: none;
+  appearance: none;
+  padding: 6px 30px 6px 10px;
+  border-color: transparent;
+  background: none
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%23bab8b1' stroke-width='1.5'%3E%3Cpath d='M3 4.5l3 3 3-3'/%3E%3C/svg%3E")
+    no-repeat right 10px center;
+  cursor: pointer;
+}
+
+.select:hover {
+  background-color: var(--hover-tint);
+}
+
+.select option {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-text-soft);
+}
+
+.actions {
+  flex: none;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.keyRow {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.keyHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.form {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.primary,
+.secondary,
+.danger {
+  border-radius: var(--radius-sm);
+  flex: none;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.primary {
+  border: 0;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.secondary {
+  border: 1px solid var(--color-border-strong);
+  background: none;
+  color: var(--color-text);
+}
+
+.danger {
+  border: 1px solid var(--color-error);
+  background: none;
+  color: var(--color-error);
+}
+
+.secondary:hover:not(:disabled),
+.danger:hover:not(:disabled) {
+  background: var(--hover-tint);
+}
+
+.primary:disabled,
+.secondary:disabled,
+.danger:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.help {
+  margin: 6px 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.error {
+  margin: 6px 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-error);
+}
+
+.window button:focus-visible,
+.window input:focus-visible,
+.window select:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* Phones: the sections become a row of tabs above the content. */
+@media (max-width: 600px) {
+  .window {
+    flex-direction: column;
+    height: calc(100vh - 2 * var(--space-4));
+  }
+
+  .nav {
+    flex-direction: row;
+    width: auto;
+    overflow-x: auto;
+    padding: var(--space-3);
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .navLabel {
+    display: none;
+  }
+
+  .navItem {
+    white-space: nowrap;
+  }
+
+  .content {
+    padding: var(--space-4);
+  }
+
+  .row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+  }
+}

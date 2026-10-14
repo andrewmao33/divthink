@@ -26,6 +26,26 @@ export async function signInWithGoogle(): Promise<string | null> {
   return error?.message ?? null
 }
 
+// Signing in with a code sent by email: the first call sends it, the second
+// checks it. Either creates the account on first use, as Google sign-in does.
+// Each resolves to an error to show, or null.
+export async function sendEmailCode(email: string): Promise<string | null> {
+  if (!supabase) return null
+  const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })
+  if (!error) return null
+  if (error.status === 429) return 'Too many codes asked for. Wait a minute, then try again.'
+  if (error.code === 'email_address_invalid') return "That doesn't look like an email address."
+  return error.message
+}
+
+export async function verifyEmailCode(email: string, code: string): Promise<string | null> {
+  if (!supabase) return null
+  const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' })
+  if (!error) return null
+  if (error.status === 429) return 'Too many tries. Wait a minute, then try again.'
+  return "That code didn't work. It may have expired: check it, or send a new one."
+}
+
 export async function signOut(): Promise<void> {
   await supabase?.auth.signOut()
 }

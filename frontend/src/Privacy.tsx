@@ -8,7 +8,7 @@ function Privacy() {
     <SiteShell current="privacy">
       <article className={styles.article}>
         <h1 className={styles.title}>Privacy Policy</h1>
-        <p className={styles.updated}>Last updated · October 12, 2026</p>
+        <p className={styles.updated}>Last updated · October 13, 2026</p>
 
         <div className={styles.body}>
           <p>
@@ -25,8 +25,8 @@ function Privacy() {
           <h2>1. What Divthink stores</h2>
           <ul>
             <li>
-              <strong>Your account.</strong> The email address and account ID that Google provides
-              when you sign in. Divthink never sees your Google password.
+              <strong>Your account.</strong> Your email address, and the account ID that Google
+              provides if you sign in with Google. Divthink never sees your Google password.
             </li>
             <li>
               <strong>Your canvases.</strong> The prompts you write, the replies the models
@@ -54,7 +54,8 @@ function Privacy() {
           <h2>2. What Divthink does not collect</h2>
           <ul>
             <li>
-              <strong>No passwords.</strong> Sign-in is handled entirely by Google.
+              <strong>No passwords.</strong> You sign in with Google, or with a one-time code
+              sent to your email.
             </li>
             <li>
               <strong>No payment details.</strong> You pay your AI provider directly, through your
@@ -78,8 +79,9 @@ function Privacy() {
             </li>
             <li>
               <strong>The companies that host Divthink.</strong> Vercel serves the website,
-              Railway runs the server, and Supabase provides the database and sign-in. They hold
-              your data only to provide those services.
+              Railway runs the server, and Supabase provides the database and sign-in,
+              including the emails that carry sign-in codes. They hold your data only to
+              provide those services.
             </li>
           </ul>
           <p>
@@ -90,7 +92,7 @@ function Privacy() {
           <h2>4. What is kept in your browser</h2>
           <p>
             Your browser's local storage holds your sign-in session, the model you last picked,
-            the canvas you last had open, and the size of the conversation panel and whether it
+            and the size of the conversation panel and whether it
             is folded away. Divthink sets no advertising or tracking cookies.
           </p>
 
@@ -102,13 +104,12 @@ function Privacy() {
               Either also removes the files attached to what was deleted.
             </li>
             <li>
-              <strong>API keys</strong> can be removed at any time from the menu, under “API
-              keys”.
+              <strong>API keys</strong> can be removed at any time under Settings → API keys.
             </li>
             <li>
-              <strong>Your account and everything in it</strong> will be deleted on request.
-              Email <a href={`mailto:${CONTACT}`}>{CONTACT}</a> from the address you signed in
-              with.
+              <strong>Your account and everything in it</strong> can be deleted at any time under
+              Settings → Account → Delete account. This removes your sign-in, every canvas and
+              file, and your saved keys, straight away.
             </li>
           </ul>
 

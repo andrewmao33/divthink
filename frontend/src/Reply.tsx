@@ -39,11 +39,11 @@ export function ReplyBody({ node, live }: { node: ApiNode; live?: LiveReply }) {
 // What the landing page's demo answers with: why there is no real reply, and
 // the way to get one.
 export function DemoReply() {
-  const { busy, start } = useGetStarted()
+  const { start } = useGetStarted()
   return (
     <p className={styles.demo}>
       This is a demo, so there is no model behind it.{' '}
-      <button type="button" className={styles.demoLink} onClick={start} disabled={busy}>
+      <button type="button" className={styles.demoLink} onClick={start}>
         Get started
       </button>{' '}
       to ask it for real.

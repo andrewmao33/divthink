@@ -39,7 +39,7 @@ It is free to use with your own Anthropic or Google API key.
 | Frontend | React 19, TypeScript, Vite, Zustand, React Flow, dagre, plain CSS Modules |
 | Backend | Python 3.13, FastAPI, asyncpg |
 | Database | Postgres (Supabase in production, Docker locally) |
-| Sign-in | Supabase Auth with Google |
+| Sign-in | Supabase Auth: Google, or a code sent by email |
 | Models | Anthropic and Google, called with each user's own key |
 | Hosting | Vercel (frontend), Railway (backend) |
 

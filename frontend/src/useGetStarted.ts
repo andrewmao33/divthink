@@ -1,28 +1,15 @@
-import { useState } from 'react'
-import { authEnabled, signInWithGoogle, supabase } from './auth'
+import { authEnabled, supabase } from './auth'
+import { navigate } from './nav'
 
-// What every "Get started" link does: sign in with Google, or go straight to
-// the app for someone who already is.
+// What every "Get started" and "Sign in" link does: the sign-in page, or
+// straight to the app for someone who is already signed in.
 export function useGetStarted() {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
   async function start() {
-    setBusy(true)
-    setError(null)
     // Already signed in (or local development without sign-in): go to the app.
     const session = supabase ? (await supabase.auth.getSession()).data.session : null
-    if (!authEnabled || session) {
-      window.location.assign('/')
-      return
-    }
-    // On success the browser leaves for Google and comes back signed in.
-    const message = await signInWithGoogle()
-    if (message) {
-      setError(message)
-      setBusy(false)
-    }
+    if (!authEnabled || session) window.location.assign('/')
+    else navigate('/sign-in')
   }
 
-  return { busy, error, start: () => void start() }
+  return { start: () => void start() }
 }

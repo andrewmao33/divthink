@@ -9,13 +9,13 @@ import {
   getPublicSession,
   getSession,
   listModels,
-  listSessions,
   renameSession,
   saveLayout,
   type CardLayout,
   type ModelInfo,
   type Session,
 } from './api'
+import { signOut } from './auth'
 import { DEMO_ACTIVE, DEMO_TITLE, demoGraph } from './demo'
 import { exchangesOf, labelOf } from './exchanges'
 import { addMissing, applyEvent, fromServer, removeNodes, type BoxNode } from './graph'
@@ -38,6 +38,8 @@ export type PendingFile = {
 
 // A delete waiting to be confirmed. `label` names the card in the question.
 type PendingDelete = { nodeIds: string[]; label: string }
+
+export type SettingsSection = 'general' | 'account' | 'keys' | 'billing'
 
 type CanvasState = {
   status: LoadStatus
@@ -70,6 +72,9 @@ type CanvasState = {
   pendingDelete: PendingDelete | null
   // The public demo: everything that writes is refused, and there is no stream.
   readOnly: boolean
+  // A new canvas that hasn't been saved yet: it is created on the server when
+  // the first prompt is sent, so opening one and leaving makes nothing.
+  unsaved: boolean
   loadPublicSession: (id: string) => Promise<void>
   // The example on the landing page: everything works, but only in this
   // browser. Nothing is sent to the server, and a prompt gets a fixed reply.
@@ -77,10 +82,11 @@ type CanvasState = {
   // What a visitor has typed into the demo since arriving at the active card.
   demoEchoes: string[]
   loadDemo: () => void
-  keysOpen: boolean // the API keys dialog
-  openKeys: () => void
-  closeKeys: () => void
+  settings: SettingsSection | null // the settings window, open on this section
+  openSettings: (section?: SettingsSection) => void
+  closeSettings: () => void
   loadSession: (id: string | null) => Promise<void>
+  // Opens a new, empty canvas. Nothing is saved until the first prompt is sent.
   newSession: () => Promise<void>
   loadModels: () => Promise<void>
   setModel: (id: string) => void
@@ -105,7 +111,7 @@ type CanvasState = {
   tidy: () => void
   renameCanvas: (title: string) => void
   // Deletes a canvas for good. Resolves to whether it went. Deleting the open
-  // one moves on to the most recently used of the rest, or a new one.
+  // one leaves a new, empty canvas in its place.
   deleteCanvas: (id: string) => Promise<boolean>
   // Asks to delete a card. Only a card nothing continues from can go.
   requestDelete: (id: string) => void
@@ -119,7 +125,6 @@ type CanvasState = {
 }
 
 const MODEL_STORAGE_KEY = 'divthink.model'
-const SESSION_STORAGE_KEY = 'divthink.session'
 const MAX_IMAGES = 8
 export const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 export const ALLOWED_TYPES = [...ALLOWED_IMAGE_TYPES, 'application/pdf']
@@ -154,9 +159,10 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   notice: null,
   pendingDelete: null,
   readOnly: false,
+  unsaved: false,
   demo: false,
   demoEchoes: [],
-  keysOpen: false,
+  settings: null,
 
   loadDemo: () => {
     const now = new Date().toISOString()
@@ -167,6 +173,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       error: null,
       connection: 'live',
       readOnly: false,
+      unsaved: false,
       demo: true,
       demoEchoes: [],
       activeId: DEMO_ACTIVE,
@@ -179,8 +186,8 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
     })
   },
 
-  openKeys: () => set({ keysOpen: true }),
-  closeKeys: () => set({ keysOpen: false }),
+  openSettings: (section = 'general') => set({ settings: section }),
+  closeSettings: () => set({ settings: null }),
 
   loadPublicSession: async (id) => {
     set({ status: 'loading', error: null, nodes: [], edges: [], readOnly: true })
@@ -195,6 +202,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
         status: 'ready',
         connection: 'live',
         readOnly: true,
+        unsaved: false,
       }))
       openLatest()
     } catch {
@@ -210,6 +218,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       status: 'loading',
       error: null,
       demo: false,
+      unsaved: false,
       demoEchoes: [],
       nodes: [],
       edges: [],
@@ -222,27 +231,18 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       pendingDelete: null,
     })
     try {
-      // No canvas named in the address: reopen the one last open in this
-      // browser, and if that one is gone, the most recently used.
-      const remembered = id ? null : readLastSession()
-      try {
-        await sync(id ?? remembered ?? (await latestOrNewSessionId()))
-      } catch (e) {
-        if (!remembered || !isMissing(e)) throw e
-        await sync(await latestOrNewSessionId())
+      if (!id) {
+        openUnsaved()
+        return
       }
+      await sync(id)
     } catch (e) {
       set({ status: 'error', error: isMissing(e) ? "That canvas doesn't exist." : messageFor(e) })
     }
   },
 
   newSession: async () => {
-    try {
-      const created = await createSession()
-      await get().loadSession(created.id)
-    } catch (e) {
-      set({ notice: messageFor(e) })
-    }
+    await get().loadSession(null)
   },
 
   loadModels: async () => {
@@ -331,7 +331,14 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
     }
     set({ sending: true, notice: null, pendingDelete: null })
     try {
-      const created = await generate(session.id, {
+      let sessionId = session.id
+      if (get().unsaved) {
+        // The first prompt on a new canvas: only now does the canvas exist.
+        sessionId = (await createSession()).id
+        await sync(sessionId)
+        set({ unsaved: false })
+      }
+      const created = await generate(sessionId, {
         prompt,
         parent_ids: parentIds,
         ...(model && { model }),
@@ -351,7 +358,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       // The stream normally delivers the new boxes (node_created). If they haven't
       // arrived yet, fetch them so they show up regardless; duplicates are skipped.
       if (!get().nodes.some((box) => box.id === created.assistant_node_id)) {
-        const graph = await getSession(session.id)
+        const graph = await getSession(sessionId)
         set((s) => addMissing(s, graph))
       }
       set((s) => ({
@@ -406,7 +413,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       }),
     }))
     // The public canvas and the demo can be rearranged, just not saved.
-    if (!session || readOnly || get().demo) return
+    if (!session || readOnly || get().demo || get().unsaved) return
     saveLayout(session.id, cards).catch(() =>
       set({ notice: "Couldn't save where that card was put. It'll move back on refresh." }),
     )
@@ -442,9 +449,9 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   },
 
   renameCanvas: (title) => {
-    const { session, readOnly } = get()
+    const { session, readOnly, unsaved } = get()
     const next = title.split(/\s+/).join(' ').trim()
-    if (!session || readOnly || next === session.title) return
+    if (!session || readOnly || unsaved || next === session.title) return
     set({ session: { ...session, title: next } })
     renameSession(session.id, next).catch(() => set({ notice: "Couldn't rename the canvas." }))
   },
@@ -541,6 +548,13 @@ let activeSessionId: string | null = null
 const MAX_RECONNECT_DELAY_MS = 10_000
 
 // Signing out: stop live updates and forget everything from the previous account.
+export function logOut() {
+  resetCanvas()
+  // Back to the plain address: the canvas in it isn't theirs to see any more.
+  window.history.replaceState(null, '', '/')
+  void signOut()
+}
+
 export function resetCanvas() {
   stream?.abort()
   stream = null
@@ -564,9 +578,10 @@ export function resetCanvas() {
     notice: null,
     pendingDelete: null,
     readOnly: false,
+    unsaved: false,
     demo: false,
     demoEchoes: [],
-    keysOpen: false,
+    settings: null,
   })
 }
 
@@ -632,7 +647,6 @@ async function sync(sessionId: string): Promise<void> {
     connection: 'live',
   }))
   if (firstLoad) openLatest()
-  rememberLastSession(sessionId)
   for (const event of waiting) apply(event)
   caughtUp = true
 
@@ -653,31 +667,22 @@ function reconnect(sessionId: string, attempt: number) {
 
 // ---- Helpers ---------------------------------------------------------------------
 
-// No canvas in the URL: open the most recently updated one, or start a new one.
-async function latestOrNewSessionId(): Promise<string> {
-  const sessions = await listSessions() // newest first
-  return sessions[0]?.id ?? (await createSession()).id
+// A new, empty canvas that exists only in this tab until a prompt is sent.
+function openUnsaved() {
+  stream?.abort() // whatever was open before has nothing more to say
+  stream = null
+  activeSessionId = null
+  const now = new Date().toISOString()
+  useCanvasStore.setState({
+    session: { id: '', title: '', default_model: null, created_at: now, updated_at: now },
+    status: 'ready',
+    connection: 'live',
+    unsaved: true,
+  })
 }
 
 function isMissing(e: unknown): boolean {
   return e instanceof ApiError && (e.status === 404 || e.status === 422)
-}
-
-// The canvas open last time, remembered in this browser only.
-function readLastSession(): string | null {
-  try {
-    return window.localStorage.getItem(SESSION_STORAGE_KEY)
-  } catch {
-    return null
-  }
-}
-
-function rememberLastSession(id: string) {
-  try {
-    window.localStorage.setItem(SESSION_STORAGE_KEY, id)
-  } catch {
-    // Storage unavailable (private window); the canvas just isn't remembered.
-  }
 }
 
 // The model picked last time, remembered in this browser only.

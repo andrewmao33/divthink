@@ -25,9 +25,9 @@ import ContextMenu, { type MenuItem } from './ContextMenu'
 import { isEditing } from './dom'
 import type { CardLayout } from './api'
 import { ancestorIds, exchangesOf, threads } from './exchanges'
-import KeysDialog from './KeysDialog'
 import { CARD_WIDTH, layout, type Point, type Size } from './layout'
 import Panel, { PANEL_MAX, PANEL_MIN } from './Panel'
+import Settings from './Settings'
 import Sidebar from './Sidebar'
 import barStyles from './Sidebar.module.css'
 import { useCanvasStore } from './store'
@@ -80,6 +80,7 @@ function Canvas({ demoId, embedded = false }: Props) {
     cancelDelete,
     startBranch,
     readOnly,
+    unsaved,
     loadPublicSession,
     loadDemo,
   } = useCanvasStore(
@@ -87,6 +88,7 @@ function Canvas({ demoId, embedded = false }: Props) {
       status: s.status,
       error: s.error,
       session: s.session,
+      unsaved: s.unsaved,
       nodes: s.nodes,
       edges: s.edges,
       activeId: s.activeId,
@@ -142,11 +144,12 @@ function Canvas({ demoId, embedded = false }: Props) {
     void loadModels()
   }, [embedded, demoId, loadPublicSession, loadSession, loadModels, loadDemo])
 
-  // Keep the open canvas in the URL, so refreshing reopens it.
+  // Keep the open canvas in the URL, so refreshing reopens it. A new canvas
+  // has no address of its own until its first prompt saves it.
   useEffect(() => {
     if (!session || readOnly || embedded) return
-    window.history.replaceState(null, '', `${CANVAS_PATH}${session.id}`)
-  }, [session, readOnly, embedded])
+    window.history.replaceState(null, '', unsaved ? '/' : `${CANVAS_PATH}${session.id}`)
+  }, [session, unsaved, readOnly, embedded])
 
   // Escape backs out of a delete waiting to be confirmed, then of a merge being
   // drafted. Ignored while typing: the composer handles its own Escape.
@@ -366,7 +369,7 @@ function Canvas({ demoId, embedded = false }: Props) {
     const loading = (
       <div className={styles.canvas}>
         <p className={styles.notice}>{status === 'error' ? error : 'Loading…'}</p>
-        {!demoId && !embedded && <KeysDialog />}
+        {!demoId && !embedded && <Settings />}
       </div>
     )
     return demoId || embedded ? loading : <Sidebar>{loading}</Sidebar>
@@ -491,7 +494,7 @@ function Canvas({ demoId, embedded = false }: Props) {
         onCollapse={(collapsed) => setPanel((p) => ({ ...p, collapsed }))}
       />
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={closeMenu} />}
-      {!bare && <KeysDialog />}
+      {!bare && <Settings />}
     </div>
   )
 
