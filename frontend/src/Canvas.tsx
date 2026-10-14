@@ -151,8 +151,8 @@ function Canvas({ demoId, embedded = false }: Props) {
     }
     void loadSession(canvasIdInAddress())
     void loadModels()
-    // Back from Stripe: show how it went.
-    if (billingReturn) useCanvasStore.getState().openSettings('billing')
+    // Back from Stripe, or signed in from "Get Pro" on the pricing page.
+    if (billingReturn || takeAfterSignIn() === 'billing') useCanvasStore.getState().openSettings('billing')
   }, [embedded, demoId, loadPublicSession, loadSession, loadModels, loadDemo])
 
   // Keep the open canvas in the URL, so refreshing reopens it. A new canvas
@@ -645,6 +645,17 @@ function ZoomButtons() {
 
 // Which canvas the address names: divthink.com/canvas/<id>. Links from before
 // that, of the form ?session=<id>, still open the canvas they point to.
+// What the pricing page asked to open once signed in, read once.
+function takeAfterSignIn(): string | null {
+  try {
+    const value = window.sessionStorage.getItem('divthink.after-sign-in')
+    window.sessionStorage.removeItem('divthink.after-sign-in')
+    return value
+  } catch {
+    return null
+  }
+}
+
 function canvasIdInAddress(): string | null {
   const { pathname, search } = window.location
   if (pathname.startsWith(CANVAS_PATH)) {
