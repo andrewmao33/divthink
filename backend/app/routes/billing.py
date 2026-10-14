@@ -66,6 +66,10 @@ async def checkout(user_id: UUID = Depends(current_user)):
             "redirect_on_completion": "if_required",
             "return_url": _settings_url("success"),
             "allow_promotion_codes": True,
+            # Stripe's merchant-of-record service (it handles sales tax for a
+            # 3.5% fee). Off unless chosen on purpose: when an account has it
+            # half set up, Stripe refuses every checkout that uses it.
+            "managed_payments": {"enabled": False},
         })
     except stripe.StripeError:
         log.exception("could not start checkout for %s", user_id)
