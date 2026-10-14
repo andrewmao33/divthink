@@ -278,6 +278,48 @@
   outline-offset: 1px;
 }
 
+/* A setting's current value, where there is nothing to change. */
+.value {
+  flex: none;
+  font-size: var(--text-sm);
+  color: var(--color-text-soft);
+}
+
+.plans {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.plan {
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+}
+
+.planCurrent {
+  border-color: var(--color-border-strong);
+  background: var(--hover-tint);
+}
+
+.planPrice {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-soft);
+}
+
+.planPoints {
+  flex: 1;
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
 /* Phones: the sections become a row of tabs above the content. */
 @media (max-width: 600px) {
   .window {
@@ -304,6 +346,10 @@
 
   .content {
     padding: var(--space-4);
+  }
+
+  .plans {
+    grid-template-columns: 1fr;
   }
 
   .row {

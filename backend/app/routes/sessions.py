@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from ..auth import current_user
 from ..db import get_pool
 from ..generation import cancel_generation
+from ..plans import check_new_canvas
 from ..schemas import Edge, Node
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -36,6 +37,7 @@ class SessionGraph(Session):
 
 @router.post("", response_model=Session, status_code=201)
 async def create_session(body: SessionCreate, user_id: UUID = Depends(current_user)):
+    await check_new_canvas(get_pool(), user_id)
     row = await get_pool().fetchrow(
         """
         INSERT INTO sessions (user_id, title, default_model)

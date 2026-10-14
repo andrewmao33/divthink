@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { deleteAccount, deleteKey, listKeys, saveKey, type KeyStatus } from './api'
+import { deleteAccount, deleteKey, getAccount, listKeys, saveKey, type Account, type KeyStatus } from './api'
 import { authEnabled, signOut, supabase } from './auth'
 import styles from './Settings.module.css'
 import { logOut, useCanvasStore, type SettingsSection } from './store'
@@ -295,20 +295,98 @@ function KeyRow({ status, onChange }: { status: KeyStatus; onChange: () => Promi
   )
 }
 
+const PLAN_OPTIONS: { id: Account['plan']; label: string; price: string; points: string[] }[] = [
+  { id: 'free', label: 'Free', price: '$0', points: ['Your own API key', '5 canvases', '50 cards per canvas'] },
+  { id: 'pro', label: 'Pro', price: '$8 a month', points: ['Your own API key', 'Unlimited canvases', 'Unlimited cards'] },
+  {
+    id: 'pro_max',
+    label: 'Pro Max',
+    price: '$20 a month',
+    points: ['No API key needed', 'Model use included', 'Unlimited canvases and cards'],
+  },
+]
+
 function Billing() {
+  const [account, setAccount] = useState<Account | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    getAccount().then(
+      (a) => {
+        if (!cancelled) setAccount(a)
+      },
+      (e: unknown) => {
+        if (!cancelled) setError(messageOf(e))
+      },
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (error) return <p className={styles.error}>{error}</p>
+  if (!account) return <p className={styles.muted}>Loading…</p>
+
   return (
-    <p className={styles.intro}>
-      Divthink is free. Replies are charged by Anthropic or Google to your own API key, so usage and
-      spending show up in the{' '}
-      <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener noreferrer">
-        Claude Console
-      </a>{' '}
-      or{' '}
-      <a href="https://aistudio.google.com/usage" target="_blank" rel="noopener noreferrer">
-        Google AI Studio
-      </a>
-      .
-    </p>
+    <>
+      <div className={styles.row}>
+        <p className={styles.rowTitle}>Plan</p>
+        <span className={styles.value}>{account.plan_label}</span>
+      </div>
+      <div className={styles.row}>
+        <p className={styles.rowTitle}>Canvases</p>
+        <span className={styles.value}>
+          {account.canvas_limit === null ? account.canvases : `${account.canvases} of ${account.canvas_limit}`}
+        </span>
+      </div>
+      <div className={styles.row}>
+        <p className={styles.rowTitle}>Cards per canvas</p>
+        <span className={styles.value}>
+          {account.card_limit === null ? 'Unlimited' : `Up to ${account.card_limit}`}
+        </span>
+      </div>
+      <div className={styles.row}>
+        <div>
+          <p className={styles.rowTitle}>Spent this month</p>
+          <p className={styles.rowHint}>
+            {account.plan === 'pro_max'
+              ? 'Model use included in your plan.'
+              : 'Charged by Anthropic or Google to your own API key. An estimate from their list prices.'}
+          </p>
+        </div>
+        <span className={styles.value}>${account.month_cost_usd.toFixed(2)}</span>
+      </div>
+
+      <div className={styles.plans}>
+        {PLAN_OPTIONS.map((option) => (
+          <section
+            key={option.id}
+            className={`${styles.plan} ${option.id === account.plan ? styles.planCurrent : ''}`}
+          >
+            <p className={styles.rowTitle}>{option.label}</p>
+            <p className={styles.planPrice}>{option.price}</p>
+            <ul className={styles.planPoints}>
+              {option.points.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
+            {option.id === account.plan ? (
+              <span className={styles.muted}>Current plan</span>
+            ) : option.id === 'pro_max' ? (
+              <span className={styles.muted}>Coming soon</span>
+            ) : (
+              option.id === 'pro' && (
+                // Until payments are set up.
+                <button type="button" className={styles.secondary} disabled>
+                  Upgrade
+                </button>
+              )
+            )}
+          </section>
+        ))}
+      </div>
+    </>
   )
 }
 

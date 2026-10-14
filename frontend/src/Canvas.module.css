@@ -158,3 +158,25 @@
   color: var(--color-text-muted);
   pointer-events: none; /* never block panning the canvas */
 }
+
+/* Where a thread started with right-click → New thread here will put its first
+   card, until the prompt is sent. */
+.newThreadSpot {
+  border-radius: var(--radius);
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border: 1px dashed var(--color-border-strong);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.newThreadTitle {
+  font-weight: 500;
+  color: var(--color-text-soft);
+}

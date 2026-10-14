@@ -1,13 +1,48 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Response
+from pydantic import BaseModel
 
 from ..auth import current_user, forget_user, supabase_logins
 from ..config import settings
 from ..db import get_pool
 from ..generation import cancel_generation
+from ..plans import PLANS
 
 router = APIRouter(prefix="/account", tags=["account"])
+
+
+class Account(BaseModel):
+    plan: str  # free, pro, pro_max
+    plan_label: str
+    canvases: int
+    canvas_limit: int | None  # None = unlimited
+    card_limit: int | None  # per canvas
+    month_cost_usd: float  # what this month's replies cost, whoever's key paid
+
+
+@router.get("", response_model=Account)
+async def get_account(user_id: UUID = Depends(current_user)):
+    """The plan, how much of it is used, and this month's spend (Settings → Billing)."""
+    row = await get_pool().fetchrow(
+        """
+        SELECT u.plan,
+               (SELECT count(*) FROM sessions WHERE user_id = u.id) AS canvases,
+               (SELECT coalesce(sum(cost_usd), 0) FROM usage_events
+                WHERE user_id = u.id AND created_at >= date_trunc('month', now())) AS month_cost
+        FROM users u WHERE u.id = $1
+        """,
+        user_id,
+    )
+    plan = PLANS[row["plan"]]
+    return Account(
+        plan=row["plan"],
+        plan_label=plan.label,
+        canvases=row["canvases"],
+        canvas_limit=plan.canvases,
+        card_limit=plan.cards_per_canvas,
+        month_cost_usd=float(row["month_cost"]),
+    )
 
 
 @router.delete("", status_code=204)

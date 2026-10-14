@@ -27,3 +27,17 @@ PROVIDER_LABELS = {
     "anthropic": "Anthropic",
     "google": "Google",
 }
+
+# What each model costs, in US dollars per million tokens: input, output, cache
+# read, cache write. Used to record what every reply cost (app/usage.py).
+# Check against the providers' pricing pages when a model is added or prices change.
+# Gemini: Google lists an introductory rate until the end of 2026; this is the
+# published rate after it, so costs err high rather than low.
+PRICES: dict[str, tuple[float, float, float, float]] = {
+    "claude-sonnet-5": (2.00, 10.00, 0.20, 2.50),
+    "claude-opus-5": (5.00, 25.00, 0.50, 6.25),
+    "gemini-3.6-flash": (1.50, 7.50, 0.15, 1.50),
+}
+
+# Per web search, in US dollars. Gemini's search grounding isn't counted yet.
+SEARCH_PRICE = {"anthropic": 0.01, "google": 0.0}

@@ -172,6 +172,27 @@
   }
 }
 
+/* Three to a row where there is room for it, counted the same way. */
+@media (min-width: 900px) {
+  .gridOfThree {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .gridOfThree .cell {
+    padding-inline: var(--space-8);
+    border-left: 1px solid var(--rule);
+  }
+
+  .gridOfThree .cell:nth-child(3n + 1) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .gridOfThree .cell:nth-child(3n) {
+    padding-right: 0;
+  }
+}
+
 .cellTitle {
   margin: 0;
   font-size: 1.0625rem;

@@ -35,10 +35,17 @@ const METHOD: [string, string][] = [
 ]
 
 const PRICING: [string, string][] = [
-  ['Divthink', 'Free. Every feature is included, and there is nothing to subscribe to.'],
   [
-    'Your AI provider',
-    'Anthropic or Google bills you at their own rates, on your own account. Each reply shows the tokens it used.',
+    'Free · $0',
+    'Every feature, merging included, with your own Anthropic or Google API key. Up to 5 canvases, and 50 cards on each.',
+  ],
+  [
+    'Pro · $8 a month',
+    'Everything in Free, with no limit on canvases or cards. You still use your own key and pay your provider directly.',
+  ],
+  [
+    'Pro Max · $20 a month',
+    'Coming soon. No API key needed: model use is included, so you can start a canvas the moment you sign in.',
   ],
 ]
 
@@ -142,12 +149,12 @@ function Landing() {
       </section>
 
       <section id="pricing" className={`${styles.section} ${styles.wide}`}>
-        <h2 className={styles.heading}>Free, with your own API key</h2>
+        <h2 className={styles.heading}>Free to start</h2>
         <p className={styles.intro}>
-          Divthink doesn’t charge for anything today. You connect your own Anthropic or Google
-          key and pay your provider directly for what you use.
+          Connect your own Anthropic or Google key and pay your provider directly for what you
+          use. Each reply shows the tokens it used.
         </p>
-        <div className={styles.grid}>
+        <div className={`${styles.grid} ${styles.gridOfThree}`}>
           {PRICING.map(([title, body]) => (
             <div key={title} className={styles.cell}>
               <h3 className={styles.cellTitle}>{title}</h3>

@@ -32,9 +32,20 @@ class Message:
 class Usage:
     """What the request cost, as the provider reported it."""
 
-    input_tokens: int = 0
-    output_tokens: int = 0
+    input_tokens: int = 0  # uncached input only; cache reads and writes are separate
+    output_tokens: int = 0  # thinking included
     cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+    searches: int = 0  # web searches, billed per search
+
+    def __add__(self, other: "Usage") -> "Usage":
+        return Usage(
+            self.input_tokens + other.input_tokens,
+            self.output_tokens + other.output_tokens,
+            self.cache_read_tokens + other.cache_read_tokens,
+            self.cache_write_tokens + other.cache_write_tokens,
+            self.searches + other.searches,
+        )
 
 
 @dataclass

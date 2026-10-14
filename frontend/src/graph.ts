@@ -11,7 +11,8 @@ export type LiveReply = {
 }
 
 // A canvas box, as React Flow sees it. The backend node rides along in data.
-export type BoxData = { node: ApiNode; live?: LiveReply }
+// `optimistic`: drawn the moment a prompt is sent, before the server has saved it.
+export type BoxData = { node: ApiNode; live?: LiveReply; optimistic?: boolean }
 export type BoxNode = Node<BoxData, 'box'>
 
 type Graph = { nodes: BoxNode[]; edges: Edge[] }
@@ -64,8 +65,27 @@ export function selectOnly(nodes: BoxNode[], id: string | null): BoxNode[] {
   })
 }
 
+// Lines drawn with optimistic boxes, before the server has given them ids.
+const LOCAL_EDGE = 'local:'
+
+export function localEdge(parentId: string, childId: string): Edge {
+  return { id: `${LOCAL_EDGE}${parentId}:${childId}`, type: 'floating', source: parentId, target: childId }
+}
+
 // Adds nodes and edges that aren't on screen yet, leaving existing ones untouched.
+// An optimistic box is the exception: the saved node takes its place, and the
+// lines drawn with it give way to the saved ones.
 export function addMissing(current: Graph, graph: ApiGraph): Graph {
+  const saved = new Map(graph.nodes.map((node) => [node.id, node]))
+  if (current.nodes.some((box) => box.data.optimistic && saved.has(box.id))) {
+    current = {
+      nodes: current.nodes.map((box) => {
+        const node = box.data.optimistic ? saved.get(box.id) : undefined
+        return node ? { ...box, data: { node, live: box.data.live } } : box
+      }),
+      edges: current.edges.filter((edge) => !(edge.id.startsWith(LOCAL_EDGE) && saved.has(edge.target))),
+    }
+  }
   const nodeIds = new Set(current.nodes.map((box) => box.id))
   const edgeIds = new Set(current.edges.map((edge) => edge.id))
   const newNodes = graph.nodes.filter((node) => !nodeIds.has(node.id))

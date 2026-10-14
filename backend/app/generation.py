@@ -13,6 +13,7 @@ from .providers.base import Chunk, Message, ProviderError
 from .providers.catalog import MODELS
 from .thinking import thought_headings
 from .titles import title_for
+from .usage import record as record_usage
 
 log = logging.getLogger(__name__)
 
@@ -136,6 +137,9 @@ async def _generate(
                     "input_tokens": usage.input_tokens,
                     "output_tokens": usage.output_tokens,
                     "cache_read_tokens": usage.cache_read_tokens,
+                    "cache_write_tokens": usage.cache_write_tokens,
+                    "searches": usage.searches,
+                    "cost_usd": await record_usage(session_id, assistant_node_id, model, "reply", usage),
                 }
             await pool.execute(
                 # "- 'error'": during a --reload restart the new process's startup cleanup
@@ -178,7 +182,9 @@ async def _write_title(
     Runs after the reply is saved, and swallows its own failures: a missing title
     is a cosmetic loss, not a reason to fail a reply that already succeeded.
     """
-    title = await title_for(reply, model, api_key)
+    title, usage = await title_for(reply, model, api_key)
+    if usage is not None:
+        await record_usage(session_id, node_id, model, "title", usage)
     if not title:
         return
     try:

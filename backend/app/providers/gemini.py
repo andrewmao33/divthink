@@ -61,10 +61,14 @@ async def stream(
             # Each chunk carries running totals; the last one wins.
             meta = getattr(chunk, "usage_metadata", None)
             if meta is not None:
+                # prompt_token_count includes the cached part, and thinking is
+                # counted apart from the answer but billed as output.
+                cached = getattr(meta, "cached_content_token_count", 0) or 0
                 total = Usage(
-                    getattr(meta, "prompt_token_count", 0) or 0,
-                    getattr(meta, "candidates_token_count", 0) or 0,
-                    getattr(meta, "cached_content_token_count", 0) or 0,
+                    (getattr(meta, "prompt_token_count", 0) or 0) - cached,
+                    (getattr(meta, "candidates_token_count", 0) or 0)
+                    + (getattr(meta, "thoughts_token_count", 0) or 0),
+                    cached,
                 )
             # chunk.text skips thought parts, so read the parts directly.
             for candidate in chunk.candidates or []:

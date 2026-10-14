@@ -4,6 +4,7 @@ import logging
 from typing import Literal
 from uuid import UUID
 
+import asyncpg
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
@@ -20,7 +21,9 @@ from ..layout import (
     reserved_block,
     prompt_position,
 )
+from ..plans import check_new_card
 from ..providers.catalog import CONTEXT_TOKENS, DEFAULT_MODEL, LABELS, MODELS, PROVIDER_LABELS
+from .nodes import CardLayout
 
 router = APIRouter(prefix="/sessions", tags=["generate"])
 log = logging.getLogger(__name__)
@@ -80,6 +83,12 @@ class GenerateRequest(BaseModel):
     parent_heights: dict[UUID, float] = Field(default={}, max_length=500)
     attachments: list[Attachment] = Field(default=[], max_length=MAX_ATTACHMENTS)
     web_search: bool = False
+    # Ids for the two new nodes, picked by the browser so it can draw them before
+    # this request returns. Optional: without them the database picks.
+    user_node_id: UUID | None = None
+    assistant_node_id: UUID | None = None
+    # Where the prompt's card goes, for a new thread started at a chosen spot.
+    layout: CardLayout | None = None
 
     _check_prompt = field_validator("prompt")(_not_blank)
 
@@ -122,6 +131,7 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
             )
             if session is None:
                 raise HTTPException(status_code=404, detail="Session not found")
+            await check_new_card(conn, user_id, session_id)
 
             rows = await conn.fetch(
                 """
@@ -160,6 +170,8 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
             # so branching makes two boxes instead of three. The reply it came from
             # is the prompt's parent, so the chain stays reply -> prompt -> reply.
             prompt_metadata: dict = {}
+            if body.layout:
+                prompt_metadata["layout"] = body.layout.model_dump(exclude_none=True)
             if body.highlight:
                 prompt_metadata["highlight"] = {
                     "source_node_id": str(source_id),
@@ -176,14 +188,19 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
             ux, uy = await free_block(
                 conn, session_id, ux, uy, reserved_block(body.prompt, len(files)), heights
             )
-            user_node_id = await insert_node(
-                conn, session_id, "user", body.prompt, "complete", ux, uy, metadata=prompt_metadata
-            )
-            assistant_id = await insert_node(
-                conn, session_id, "assistant", "", "pending",
-                ux, uy + estimate_prompt_height(body.prompt, len(files)) + GAP_BELOW_Y,
-                model=body.model,
-            )
+            try:
+                user_node_id = await insert_node(
+                    conn, session_id, "user", body.prompt, "complete", ux, uy,
+                    metadata=prompt_metadata, id=body.user_node_id,
+                )
+                assistant_id = await insert_node(
+                    conn, session_id, "assistant", "", "pending",
+                    ux, uy + estimate_prompt_height(body.prompt, len(files)) + GAP_BELOW_Y,
+                    model=body.model, id=body.assistant_node_id,
+                )
+            except asyncpg.UniqueViolationError:
+                # A browser-picked id that is already in use (or the same id twice).
+                raise HTTPException(status_code=409, detail="Couldn't save that prompt. Try again.")
             await insert_edges(
                 conn, session_id, [(p[0], user_node_id) for p in parents] + [(user_node_id, assistant_id)]
             )

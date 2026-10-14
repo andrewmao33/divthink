@@ -92,6 +92,9 @@ async def stream(
             total.input_tokens += getattr(used, "input_tokens", 0) or 0
             total.output_tokens += getattr(used, "output_tokens", 0) or 0
             total.cache_read_tokens += getattr(used, "cache_read_input_tokens", 0) or 0
+            total.cache_write_tokens += getattr(used, "cache_creation_input_tokens", 0) or 0
+            server_tools = getattr(used, "server_tool_use", None)
+            total.searches += getattr(server_tools, "web_search_requests", 0) or 0
 
             if final.stop_reason != "pause_turn":
                 break

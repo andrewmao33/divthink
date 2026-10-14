@@ -162,7 +162,7 @@ function Panel({ width, onResize, collapsed, onCollapse }: Props) {
           <button
             type="button"
             className={styles.newThread}
-            onClick={startNewThread}
+            onClick={() => startNewThread()}
             disabled={!active && !merging}
           >
             + New thread

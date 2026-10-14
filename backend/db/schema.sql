@@ -6,6 +6,7 @@ CREATE TABLE users (
   email       text NOT NULL UNIQUE,
   google_sub  text UNIQUE,
   auto_branch boolean NOT NULL DEFAULT true,
+  plan        text NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'pro_max')),
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 
@@ -88,6 +89,26 @@ CREATE INDEX attachments_node_id_idx ON attachments (node_id);
 -- (Lookups by parent_id use the UNIQUE (parent_id, child_id) index.)
 CREATE INDEX edges_child_id_idx ON edges (child_id);
 
+-- What every model call cost, per user (app/usage.py). No foreign key to nodes:
+-- deleting a card or canvas keeps its cost on record, so an allowance can't be
+-- reset by deleting things.
+CREATE TABLE usage_events (
+  id                 bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id            uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  node_id            uuid,
+  model              text NOT NULL,
+  kind               text NOT NULL CHECK (kind IN ('reply', 'title')),
+  input_tokens       integer NOT NULL DEFAULT 0,
+  output_tokens      integer NOT NULL DEFAULT 0,
+  cache_read_tokens  integer NOT NULL DEFAULT 0,
+  cache_write_tokens integer NOT NULL DEFAULT 0,
+  searches           integer NOT NULL DEFAULT 0,
+  cost_usd           numeric(12, 6) NOT NULL,
+  created_at         timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX usage_events_user_created_idx ON usage_events (user_id, created_at);
+
 -- Supabase exposes tables in the public schema through its REST API using the
 -- browser's publishable key. Row level security with no policies blocks that
 -- access entirely. The backend connects as the tables' owner, which RLS doesn't
@@ -98,3 +119,4 @@ ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE nodes    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE edges    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE attachments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE usage_events ENABLE ROW LEVEL SECURITY;

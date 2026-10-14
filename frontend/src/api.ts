@@ -135,6 +135,11 @@ export type GenerateRequest = {
   // its text, and only the browser knows that, so without this the server would
   // have to guess and would drop new boxes on top of long replies.
   parent_heights?: Record<string, number>
+  // Ids for the two new nodes, so the browser can draw them before this returns.
+  user_node_id?: string
+  assistant_node_id?: string
+  // Where the first card of a new thread goes, when one was picked.
+  layout?: { x: number; y: number }
 }
 
 export type GenerateResponse = {
@@ -231,4 +236,17 @@ export function deleteKey(provider: string): Promise<void> {
 // Deletes the signed-in account and everything in it, including the login.
 export function deleteAccount(): Promise<void> {
   return request('/account', { method: 'DELETE' })
+}
+
+export type Account = {
+  plan: 'free' | 'pro' | 'pro_max'
+  plan_label: string
+  canvases: number
+  canvas_limit: number | null // null = unlimited
+  card_limit: number | null // per canvas
+  month_cost_usd: number // this month's replies, whoever's key paid
+}
+
+export function getAccount(): Promise<Account> {
+  return request('/account')
 }

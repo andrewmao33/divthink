@@ -11,6 +11,7 @@ import {
   listModels,
   renameSession,
   saveLayout,
+  type ApiNode,
   type CardLayout,
   type ModelInfo,
   type Session,
@@ -18,7 +19,8 @@ import {
 import { signOut } from './auth'
 import { DEMO_ACTIVE, DEMO_TITLE, demoGraph } from './demo'
 import { exchangesOf, labelOf } from './exchanges'
-import { addMissing, applyEvent, fromServer, removeNodes, type BoxNode } from './graph'
+import { addMissing, applyEvent, fromServer, localEdge, removeNodes, type BoxNode } from './graph'
+import type { Point } from './layout'
 import { readStream, type StreamEvent } from './stream'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -94,7 +96,10 @@ type CanvasState = {
   // jumps made from the panel, where the card may be off screen.
   setActive: (id: string, centre?: boolean) => void
   // Clears the panel for a new thread. Nothing is created until a prompt is sent.
-  startNewThread: () => void
+  // Opens a new, empty thread. `at`, where on the canvas its first card goes
+  // (right-click → New thread here); without it, the automatic layout decides.
+  startNewThread: (at?: Point) => void
+  newThreadAt: Point | null
   // Adds a card to the merge, or takes it out. Starting a merge from nothing
   // brings the active card along: "this one, and that one".
   toggleMerge: (id: string) => void
@@ -148,6 +153,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   edges: [],
   activeId: null,
   previousActiveId: null,
+  newThreadAt: null,
   mergeIds: [],
   focus: null,
   connection: 'live',
@@ -224,6 +230,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       edges: [],
       activeId: null,
       previousActiveId: null,
+      newThreadAt: null,
       mergeIds: [],
       focus: null,
       highlight: null,
@@ -281,8 +288,9 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       }
     }),
 
-  startNewThread: () =>
+  startNewThread: (at) =>
     set((s) => ({
+      newThreadAt: at ?? null,
       activeId: null,
       previousActiveId: s.activeId ?? s.previousActiveId,
       demoEchoes: [],
@@ -329,7 +337,63 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       }))
       return true
     }
-    set({ sending: true, notice: null, pendingDelete: null })
+    // Drawn now, saved after: the prompt and an empty reply appear the moment
+    // Enter is pressed, with the ids the server will save them under.
+    // A new thread opened at a chosen spot starts there, and stays there.
+    const at = parentIds.length === 0 && !highlight ? get().newThreadAt : null
+    const userId = crypto.randomUUID()
+    const assistantId = crypto.randomUUID()
+    const now = new Date().toISOString()
+    const draft = (node: Pick<ApiNode, 'id' | 'type' | 'content' | 'model' | 'status' | 'metadata'>): BoxNode => ({
+      id: node.id,
+      type: 'box',
+      position: { x: 0, y: 0 },
+      data: { node: { ...node, position_x: 0, position_y: 0, created_at: now }, optimistic: true },
+    })
+    const drafts = {
+      nodes: [
+        draft({
+          id: userId,
+          type: 'user',
+          content: prompt,
+          model: null,
+          status: 'complete',
+          metadata: {
+            ...(highlight && { highlight: { source_node_id: highlight.sourceNodeId, text: highlight.text } }),
+            ...(at && { layout: at }),
+          },
+        }),
+        draft({ id: assistantId, type: 'assistant', content: '', model, status: 'pending', metadata: {} }),
+      ],
+      edges: [...parentIds.map((p) => localEdge(p, userId)), localEdge(userId, assistantId)],
+    }
+    const before = {
+      activeId,
+      previousActiveId: get().previousActiveId,
+      newThreadAt: get().newThreadAt,
+      mergeIds,
+      highlight,
+      images,
+    }
+    const showDrafts = () =>
+      set((s) => ({
+        nodes: [...s.nodes.filter((box) => box.id !== userId && box.id !== assistantId), ...drafts.nodes],
+        edges: [...s.edges.filter((edge) => !drafts.edges.some((d) => d.id === edge.id)), ...drafts.edges],
+      }))
+    showDrafts()
+    set({
+      sending: true,
+      notice: null,
+      pendingDelete: null,
+      // The new card becomes the active one, so sending again continues it.
+      activeId: userId,
+      previousActiveId: null,
+      newThreadAt: null,
+      mergeIds: [],
+      focus: { id: userId },
+      highlight: null,
+      images: [],
+    })
     try {
       let sessionId = session.id
       if (get().unsaved) {
@@ -337,10 +401,16 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
         sessionId = (await createSession()).id
         await sync(sessionId)
         set({ unsaved: false })
+        // Loading the new, empty canvas cleared the drafts; put them back.
+        if (!get().nodes.some((box) => box.id === userId)) showDrafts()
+        set({ activeId: userId, focus: { id: userId } })
       }
       const created = await generate(sessionId, {
         prompt,
         parent_ids: parentIds,
+        user_node_id: userId,
+        assistant_node_id: assistantId,
+        ...(at && { layout: at }),
         ...(model && { model }),
         ...(highlight && {
           highlight: { source_node_id: highlight.sourceNodeId, text: highlight.text },
@@ -355,26 +425,27 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
         // Always offered; the model only searches when the question needs it.
         web_search: true,
       })
-      // The stream normally delivers the new boxes (node_created). If they haven't
-      // arrived yet, fetch them so they show up regardless; duplicates are skipped.
-      if (!get().nodes.some((box) => box.id === created.assistant_node_id)) {
+      // The stream normally delivers the saved nodes (node_created). If they haven't
+      // arrived yet, fetch them so the drafts are replaced regardless.
+      const stillDraft = (id: string) => get().nodes.some((box) => box.id === id && box.data.optimistic)
+      if (stillDraft(created.user_node_id) || stillDraft(created.assistant_node_id)) {
         const graph = await getSession(sessionId)
         set((s) => addMissing(s, graph))
       }
       set((s) => ({
-        // The new card becomes the active one, so sending again continues it.
-        activeId: created.user_node_id,
-        previousActiveId: null,
-        mergeIds: [],
-        focus: { id: created.user_node_id },
         session: s.session && { ...s.session, title: created.session_title },
-        highlight: null,
-        images: [],
         sending: false,
       }))
       return true
     } catch (e) {
-      set({ sending: false, notice: messageFor(e) })
+      // Not saved: the drafts go, and everything is as it was before sending.
+      set((s) => ({
+        ...removeNodes(s, [userId, assistantId]),
+        ...before,
+        focus: before.activeId ? { id: before.activeId } : null,
+        sending: false,
+        notice: messageFor(e),
+      }))
       return false
     }
   },
@@ -567,6 +638,7 @@ export function resetCanvas() {
     edges: [],
     activeId: null,
     previousActiveId: null,
+    newThreadAt: null,
     mergeIds: [],
     focus: null,
     connection: 'live',

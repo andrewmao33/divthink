@@ -25,14 +25,16 @@ async def insert_node(
     y: float,
     model: str | None = None,
     metadata: dict | None = None,
+    id: UUID | None = None,
 ) -> UUID:
+    # `id` is chosen by the browser when it draws the node before saving it.
     return await conn.fetchval(
         """
-        INSERT INTO nodes (session_id, type, content, model, position_x, position_y, status, metadata)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO nodes (id, session_id, type, content, model, position_x, position_y, status, metadata)
+        VALUES (COALESCE($9, gen_random_uuid()), $1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id
         """,
-        session_id, type, content, model, x, y, status, metadata or {},
+        session_id, type, content, model, x, y, status, metadata or {}, id,
     )
 
 

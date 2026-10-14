@@ -20,6 +20,7 @@ function Composer({ active, merging }: Props) {
   const {
     demo,
     highlight,
+    newThreadAt,
     images,
     sending,
     notice,
@@ -39,6 +40,8 @@ function Composer({ active, merging }: Props) {
     useShallow((s) => ({
       demo: s.demo,
       highlight: s.highlight,
+      // A new spot picked on the canvas focuses again, even from a new thread.
+      newThreadAt: s.newThreadAt,
       images: s.images,
       sending: s.sending,
       notice: s.notice,
@@ -83,7 +86,7 @@ function Composer({ active, merging }: Props) {
     if (demo && first) return
     if (highlight || !active || merging) inputRef.current?.focus()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [highlight, active, merging !== null])
+  }, [highlight, active, merging !== null, newThreadAt])
 
   // Typing while the canvas has focus (e.g. right after clicking a card) goes
   // into the composer. Not in the demo, which shares its page with other things.
@@ -100,8 +103,10 @@ function Composer({ active, merging }: Props) {
   async function submit() {
     const prompt = text.trim()
     if (!prompt || sending || blocked || needsKey) return
-    // Keep the text if sending fails, so nothing typed is lost.
-    if (await sendPrompt(prompt)) setText('')
+    // Cleared at once, as the prompt appears; put back if sending fails, so
+    // nothing typed is lost (unless something new has been typed since).
+    setText('')
+    if (!(await sendPrompt(prompt))) setText((current) => current || text)
   }
 
   // Screenshots arrive either pasted or dropped; both end up here.

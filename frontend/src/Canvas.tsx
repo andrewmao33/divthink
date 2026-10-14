@@ -1,10 +1,12 @@
 import {
   PanOnScrollMode,
   ReactFlow,
+  ViewportPortal,
   useReactFlow,
   useStore,
   type Edge,
   type NodeChange,
+  type ReactFlowInstance,
 } from '@xyflow/react'
 // React Flow's required styles only, not its theme. Its few visual defaults are
 // CSS variables, which Canvas.module.css points at our own tokens.
@@ -79,6 +81,8 @@ function Canvas({ demoId, embedded = false }: Props) {
     requestDelete,
     cancelDelete,
     startBranch,
+    startNewThread,
+    newThreadAt,
     readOnly,
     unsaved,
     loadPublicSession,
@@ -105,12 +109,16 @@ function Canvas({ demoId, embedded = false }: Props) {
       requestDelete: s.requestDelete,
       cancelDelete: s.cancelDelete,
       startBranch: s.startBranch,
+      startNewThread: s.startNewThread,
+      newThreadAt: s.newThreadAt,
       readOnly: s.readOnly,
       loadPublicSession: s.loadPublicSession,
       loadDemo: s.loadDemo,
     })),
   )
   const [menu, setMenu] = useState<Menu | null>(null)
+  // For turning a point on screen into a point on the canvas.
+  const flow = useRef<ReactFlowInstance<CardNode, Edge> | null>(null)
   const closeMenu = useCallback(() => setMenu(null), [])
   const [panel, setPanel] = useState(() =>
     embedded
@@ -325,7 +333,27 @@ function Canvas({ demoId, embedded = false }: Props) {
 
     const id = cardIdAt(e.target)
     const exchange = id ? byId.get(id) : undefined
-    if (!exchange) return
+    if (!exchange) {
+      // Empty canvas: start a thread whose first card goes right here.
+      const onPane = e.target instanceof Element && e.target.closest('.react-flow__pane')
+      if (!onPane || readOnly || embedded || !flow.current) return
+      e.preventDefault()
+      const at = flow.current.screenToFlowPosition({ x: e.clientX, y: e.clientY })
+      setMenu({
+        x: e.clientX,
+        y: e.clientY,
+        items: [
+          {
+            label: 'New thread here',
+            onClick: () => {
+              startNewThread({ x: Math.round(at.x), y: Math.round(at.y) })
+              closeMenu()
+            },
+          },
+        ],
+      })
+      return
+    }
     const items: MenuItem[] = []
     if (!readOnly) {
       items.push({
@@ -431,6 +459,9 @@ function Canvas({ demoId, embedded = false }: Props) {
           )
         }}
         onMoveStart={closeMenu}
+        onInit={(instance) => {
+          flow.current = instance
+        }}
         nodeTypes={nodeTypes}
         nodesConnectable={false}
         nodesFocusable={false}
@@ -454,6 +485,18 @@ function Canvas({ demoId, embedded = false }: Props) {
         maxZoom={2}
       >
         <Grain scaled={!embedded} />
+        {newThreadAt && activeId === null && mergeIds.length === 0 && (
+          // Where the new thread's first card will go, until its prompt is sent.
+          <ViewportPortal>
+            <div
+              className={styles.newThreadSpot}
+              style={{ width: CARD_WIDTH, transform: `translate(${newThreadAt.x}px, ${newThreadAt.y}px)` }}
+            >
+              <span className={styles.newThreadTitle}>New thread</span>
+              Write the first prompt on the left.
+            </div>
+          </ViewportPortal>
+        )}
         <Focus
           positions={positions}
           sizes={sizes}

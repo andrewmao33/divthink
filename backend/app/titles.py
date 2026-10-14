@@ -11,6 +11,7 @@ import anthropic
 from google import genai
 from google.genai import types
 
+from .providers.base import Usage
 from .providers.catalog import MODELS
 
 log = logging.getLogger(__name__)
@@ -25,19 +26,20 @@ INSTRUCTION = (
 )
 
 
-async def title_for(text: str, model: str, api_key: str) -> str | None:
+async def title_for(text: str, model: str, api_key: str) -> tuple[str | None, Usage | None]:
+    """The title, and what writing it cost (None if the call never completed)."""
     source = text.strip()[:SOURCE_CHARS]
     if not source:
-        return None
+        return None, None
     try:
         if MODELS.get(model) == "anthropic":
-            title = await _claude(source, model, api_key)
+            title, usage = await _claude(source, model, api_key)
         else:
-            title = await _gemini(source, model, api_key)
+            title, usage = await _gemini(source, model, api_key)
     except Exception:
         log.warning("could not write a title with %s", model, exc_info=True)
-        return None
-    return _tidy(title)
+        return None, None
+    return _tidy(title), usage
 
 
 def _tidy(title: str | None) -> str | None:
@@ -48,7 +50,7 @@ def _tidy(title: str | None) -> str | None:
     return cleaned[:MAX_TITLE_CHARS] or None
 
 
-async def _claude(source: str, model: str, api_key: str) -> str | None:
+async def _claude(source: str, model: str, api_key: str) -> tuple[str | None, Usage]:
     client = anthropic.AsyncAnthropic(api_key=api_key)
     try:
         reply = await client.messages.create(
@@ -57,12 +59,19 @@ async def _claude(source: str, model: str, api_key: str) -> str | None:
             system=INSTRUCTION,
             messages=[{"role": "user", "content": source}],
         )
-        return "".join(b.text for b in reply.content if getattr(b, "type", None) == "text")
+        used = reply.usage
+        usage = Usage(
+            used.input_tokens or 0,
+            used.output_tokens or 0,
+            getattr(used, "cache_read_input_tokens", 0) or 0,
+            getattr(used, "cache_creation_input_tokens", 0) or 0,
+        )
+        return "".join(b.text for b in reply.content if getattr(b, "type", None) == "text"), usage
     finally:
         await client.close()
 
 
-async def _gemini(source: str, model: str, api_key: str) -> str | None:
+async def _gemini(source: str, model: str, api_key: str) -> tuple[str | None, Usage]:
     client = genai.Client(api_key=api_key)
     try:
         reply = await client.aio.models.generate_content(
@@ -74,7 +83,15 @@ async def _gemini(source: str, model: str, api_key: str) -> str | None:
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
             ),
         )
-        return reply.text
+        meta = reply.usage_metadata
+        cached = getattr(meta, "cached_content_token_count", 0) or 0
+        usage = Usage(
+            (getattr(meta, "prompt_token_count", 0) or 0) - cached,
+            (getattr(meta, "candidates_token_count", 0) or 0)
+            + (getattr(meta, "thoughts_token_count", 0) or 0),
+            cached,
+        )
+        return reply.text, usage
     finally:
         aclose = getattr(client.aio, "aclose", None)
         if aclose is not None:

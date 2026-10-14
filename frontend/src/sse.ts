@@ -15,7 +15,14 @@ export type StreamEvent =
         content: string
         thought_headings: string[]
         thinking_seconds: number | null
-        usage?: { input_tokens: number; output_tokens: number; cache_read_tokens: number } | null
+        usage?: {
+          input_tokens: number
+          output_tokens: number
+          cache_read_tokens: number
+          cache_write_tokens?: number
+          searches?: number
+          cost_usd?: number
+        } | null
       }
     }
   | { type: 'titled'; data: { node_id: string; title: string } }
