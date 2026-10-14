@@ -2,6 +2,7 @@
   "redirects": [{ "source": "/privacy.html", "destination": "/privacy", "permanent": true }],
   "rewrites": [
     { "source": "/privacy", "destination": "/index.html" },
+    { "source": "/terms", "destination": "/index.html" },
     { "source": "/sign-in", "destination": "/index.html" },
     { "source": "/canvas/:id", "destination": "/index.html" }
   ]

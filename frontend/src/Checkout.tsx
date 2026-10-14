@@ -140,11 +140,15 @@ function Checkout({ onClose, onComplete }: { onClose: () => void; onComplete: ()
 
           <p className={styles.agree}>
             By subscribing you agree to the{' '}
+            <a href="/terms" target="_blank" rel="noopener noreferrer">
+              Terms of Service
+            </a>{' '}
+            and{' '}
             <a href="/privacy" target="_blank" rel="noopener noreferrer">
               Privacy Policy
             </a>
             . Pro renews every month until you cancel, which you can do anytime in Settings → Billing;
-            it lasts until the end of the month you paid for.
+            it lasts until the end of the month you paid for. Payments are not refunded.
           </p>
 
           {error && <p className={styles.error}>{error}</p>}

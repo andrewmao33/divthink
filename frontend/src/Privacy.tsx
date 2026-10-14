@@ -8,7 +8,7 @@ function Privacy() {
     <SiteShell current="privacy">
       <article className={styles.article}>
         <h1 className={styles.title}>Privacy Policy</h1>
-        <p className={styles.updated}>Last updated · October 13, 2026</p>
+        <p className={styles.updated}>Last updated · October 14, 2026</p>
 
         <div className={styles.body}>
           <p>
@@ -58,8 +58,9 @@ function Privacy() {
               sent to your email.
             </li>
             <li>
-              <strong>No payment details.</strong> You pay your AI provider directly, through your
-              own account with them.
+              <strong>No card details.</strong> Pro is paid through Stripe, which handles your
+              card; Divthink stores only your Stripe customer ID and which plan you are on. Model
+              use is paid to your AI provider directly, through your own account with them.
             </li>
             <li>
               <strong>No advertising or analytics trackers.</strong>
@@ -67,7 +68,7 @@ function Privacy() {
           </ul>
 
           <h2>3. Who receives your data</h2>
-          <p>Your data goes to two kinds of company, and nobody else.</p>
+          <p>Your data goes to these companies, and nobody else.</p>
           <ul>
             <li>
               <strong>The AI provider you choose: Anthropic or Google.</strong> To generate a
@@ -82,6 +83,10 @@ function Privacy() {
               Railway runs the server, and Supabase provides the database and sign-in,
               including the emails that carry sign-in codes. They hold your data only to
               provide those services.
+            </li>
+            <li>
+              <strong>Stripe, if you subscribe to Pro.</strong> Stripe receives your email
+              address and handles your payment details and billing under its own privacy policy.
             </li>
           </ul>
           <p>

@@ -169,6 +169,10 @@ function SignIn() {
 
         <p className={styles.fine}>
           By signing in you agree to the{' '}
+          <a href="/terms" onClick={onLinkClick}>
+            terms of service
+          </a>{' '}
+          and{' '}
           <a href="/privacy" onClick={onLinkClick}>
             privacy policy
           </a>

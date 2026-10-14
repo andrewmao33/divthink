@@ -5,7 +5,7 @@ import styles from './SiteShell.module.css'
 
 const GITHUB_URL = 'https://github.com/andrewmao33/divthink'
 
-export type Page = 'home' | 'method' | 'pricing' | 'faq' | 'privacy' | 'sign-in'
+export type Page = 'home' | 'method' | 'pricing' | 'faq' | 'privacy' | 'terms' | 'sign-in'
 
 // The menu, top-left on every page. All four are parts of the home page: the
 // top of it, then sections further down. The footer repeats all but the first.
@@ -103,6 +103,11 @@ function SiteShell({ current, children }: { current: Page; children?: ReactNode 
                     {/* Google's sign-in consent screen requires the policy to be linked from the home page. */}
                     <a href="/privacy" onClick={onLinkClick}>
                       Privacy Policy
+                    </a>
+                  </li>
+                  <li>
+                    <a href="/terms" onClick={onLinkClick}>
+                      Terms of Service
                     </a>
                   </li>
                 </ul>

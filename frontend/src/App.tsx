@@ -4,6 +4,7 @@ import Canvas from './Canvas'
 import Landing from './Landing'
 import { currentPath } from './nav'
 import Privacy from './Privacy'
+import Terms from './Terms'
 import SignIn from './SignIn'
 import { resetCanvas } from './store'
 
@@ -37,6 +38,7 @@ function App() {
   // Readable signed in or out. /privacy.html is the policy's old address, which
   // Google's sign-in consent screen may still link to.
   if (path === '/privacy' || path === '/privacy.html') return <Privacy />
+  if (path === '/terms') return <Terms />
   if (demoId) return <Canvas demoId={demoId} /> // public canvas, no sign-in
   if (!authEnabled) return <Canvas /> // local development without sign-in
   if (session === undefined) return null
