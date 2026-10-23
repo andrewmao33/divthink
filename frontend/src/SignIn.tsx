@@ -1,15 +1,39 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { sendEmailCode, signInWithGoogle, verifyEmailCode } from './auth'
+import { NO_ACCOUNT, sendEmailCode, signInWithGoogle, verifyEmailCode } from './auth'
 import { onLinkClick } from './nav'
+import { wantsCheckout } from './upgrade'
 import SiteShell from './SiteShell'
 import styles from './SignIn.module.css'
 
 // How long before another code can be sent to the same address.
 const RESEND_WAIT_S = 60
 
-// Signing in and signing up, which are the same step: Google, or a code sent
-// to an email address. Once signed in, App shows the canvas in place of this.
-function SignIn() {
+type Mode = 'sign-up' | 'log-in'
+
+const COPY: Record<Mode, { title: string; note: string; submit: string; switchText: string; switchLink: string; switchTo: string }> = {
+  'sign-up': {
+    title: 'Welcome to Divthink',
+    note: 'Create a new account',
+    submit: 'Sign up',
+    switchText: 'Already have an account?',
+    switchLink: 'Log in',
+    switchTo: '/sign-in',
+  },
+  'log-in': {
+    title: 'Welcome back',
+    note: 'Log in to your account',
+    submit: 'Log in',
+    switchText: 'Don’t have an account?',
+    switchLink: 'Sign up',
+    switchTo: '/sign-up',
+  },
+}
+
+// Signing up (/sign-up) and logging in (/sign-in): Google, or a code sent to an
+// email address. A page of its own, centred, without the site's menu. Once
+// signed in, App shows the app in place of this.
+function SignIn({ mode }: { mode: Mode }) {
+  const copy = COPY[mode]
   const [email, setEmail] = useState('')
   // The address a code went to; null while it is still being asked for.
   const [sentTo, setSentTo] = useState<string | null>(null)
@@ -18,6 +42,8 @@ function SignIn() {
   const [error, setError] = useState<string | null>(null)
   const [wait, setWait] = useState(0)
   const codeInput = useRef<HTMLInputElement>(null)
+  // Came from "Get Pro" on the home page.
+  const [forPro] = useState(wantsCheckout)
 
   useEffect(() => {
     if (wait <= 0) return
@@ -28,6 +54,9 @@ function SignIn() {
   useEffect(() => {
     if (sentTo) codeInput.current?.focus()
   }, [sentTo])
+
+  // Switching between the two pages keeps the address typed so far.
+  useEffect(() => setError(null), [mode])
 
   async function google() {
     setBusy('google')
@@ -43,7 +72,7 @@ function SignIn() {
   async function send(address: string) {
     setBusy('send')
     setError(null)
-    const message = await sendEmailCode(address)
+    const message = await sendEmailCode(address, mode === 'sign-up')
     setBusy(null)
     if (message) {
       setError(message)
@@ -59,7 +88,7 @@ function SignIn() {
     if (!sentTo) return
     setBusy('verify')
     setError(null)
-    // On success the sign-in arrives through App's listener and the canvas
+    // On success the sign-in arrives through App's listener and the app
     // replaces this page; nothing more to do here.
     const message = await verifyEmailCode(sentTo, code)
     if (message) {
@@ -69,20 +98,26 @@ function SignIn() {
   }
 
   return (
-    <SiteShell current="sign-in">
-      <section className={styles.page}>
+    <SiteShell bare>
+      <main className={styles.column}>
+        <a className={styles.markLink} href="/" onClick={onLinkClick} aria-label="Divthink home">
+          <img className={styles.mark} src="/logo.svg" alt="" />
+        </a>
+
         {sentTo === null ? (
           <>
-            <h1 className={styles.title}>Sign in to Divthink</h1>
-            <p className={styles.note}>New here? Signing in creates your account.</p>
+            <h1 className={styles.title}>{copy.title}</h1>
+            <p className={styles.note}>
+              {forPro ? `${copy.note}. Checkout for Pro opens straight after.` : copy.note}
+            </p>
 
             <button type="button" className={styles.google} onClick={() => void google()} disabled={busy !== null}>
               <GoogleMark />
-              {busy === 'google' ? 'Redirecting…' : 'Continue with Google'}
+              <span>{busy === 'google' ? 'Redirecting…' : 'Continue with Google'}</span>
             </button>
 
             <div className={styles.or} aria-hidden="true">
-              <span>or</span>
+              <span>OR</span>
             </div>
 
             <form
@@ -92,21 +127,18 @@ function SignIn() {
                 void send(email.trim())
               }}
             >
-              <label className={styles.label} htmlFor="sign-in-email">
-                Email
-              </label>
               <input
-                id="sign-in-email"
                 className={styles.input}
                 type="email"
                 autoComplete="email"
-                placeholder="you@example.com"
+                aria-label="Email address"
+                placeholder="Email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
               <button type="submit" className={styles.primary} disabled={busy !== null || !email.trim()}>
-                {busy === 'send' ? 'Sending…' : 'Email me a code'}
+                {busy === 'send' ? 'Sending a code…' : copy.submit}
               </button>
             </form>
           </>
@@ -114,26 +146,24 @@ function SignIn() {
           <>
             <h1 className={styles.title}>Check your email</h1>
             <p className={styles.note}>
-              We sent a sign-in code to <strong className={styles.address}>{sentTo}</strong>.
+              We sent a code to <strong className={styles.address}>{sentTo}</strong>
             </p>
 
             <form className={styles.form} onSubmit={(e) => void verify(e)}>
-              <label className={styles.label} htmlFor="sign-in-code">
-                Code
-              </label>
               <input
                 ref={codeInput}
-                id="sign-in-code"
                 className={`${styles.input} ${styles.code}`}
                 inputMode="numeric"
                 autoComplete="one-time-code"
+                aria-label="Code"
+                placeholder="Code"
                 maxLength={10}
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
                 required
               />
               <button type="submit" className={styles.primary} disabled={busy !== null || code.length < 6}>
-                {busy === 'verify' ? 'Checking…' : 'Sign in'}
+                {busy === 'verify' ? 'Checking…' : 'Continue'}
               </button>
             </form>
 
@@ -164,21 +194,38 @@ function SignIn() {
         {error && (
           <p className={styles.error} role="alert">
             {error}
+            {error === NO_ACCOUNT && (
+              <>
+                {' '}
+                <a href="/sign-up" onClick={onLinkClick}>
+                  Sign up instead
+                </a>
+              </>
+            )}
+          </p>
+        )}
+
+        {sentTo === null && (
+          <p className={styles.switch}>
+            {copy.switchText}{' '}
+            <a href={copy.switchTo} onClick={onLinkClick}>
+              {copy.switchLink}
+            </a>
           </p>
         )}
 
         <p className={styles.fine}>
-          By signing in you agree to the{' '}
+          By continuing you agree to the{' '}
           <a href="/terms" onClick={onLinkClick}>
-            terms of service
+            Terms of Service
           </a>{' '}
           and{' '}
           <a href="/privacy" onClick={onLinkClick}>
-            privacy policy
+            Privacy Policy
           </a>
           .
         </p>
-      </section>
+      </main>
     </SiteShell>
   )
 }

@@ -11,8 +11,8 @@ import {
   type KeyStatus,
 } from './api'
 import { authEnabled, signOut, supabase } from './auth'
-import Checkout from './Checkout'
 import { billingReturn } from './nav'
+import { goToCheckout } from './upgrade'
 import styles from './Settings.module.css'
 import { logOut, useCanvasStore, type SettingsSection } from './store'
 
@@ -306,9 +306,6 @@ function KeyRow({ status, onChange }: { status: KeyStatus; onChange: () => Promi
   )
 }
 
-// Whether this build can take payments at all (the server has to agree too).
-const checkoutAvailable = Boolean(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY)
-
 const PLAN_OPTIONS: { id: Account['plan']; label: string; price: string; points: string[] }[] = [
   { id: 'free', label: 'Free', price: '$0', points: ['Your own API key', '5 canvases', '50 cards per canvas'] },
   { id: 'pro', label: 'Pro', price: '$8 a month', points: ['Your own API key', 'Unlimited canvases', 'Unlimited cards'] },
@@ -324,7 +321,6 @@ function Billing() {
   const [account, setAccount] = useState<Account | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [checkingOut, setCheckingOut] = useState(false)
   // Just paid: Stripe tells the server a moment later, so the plan is checked
   // again a few times until it shows.
   const [waiting, setWaiting] = useState(billingReturn === 'success')
@@ -349,6 +345,17 @@ function Billing() {
     }
   }, [waiting])
 
+  async function upgrade() {
+    setBusy(true)
+    setError(null)
+    try {
+      await goToCheckout() // the browser leaves for Stripe
+    } catch (e) {
+      setError(messageOf(e))
+      setBusy(false)
+    }
+  }
+
   async function manage() {
     setBusy(true)
     setError(null)
@@ -362,19 +369,9 @@ function Billing() {
 
   if (!account) return error ? <p className={styles.error}>{error}</p> : <p className={styles.muted}>Loading…</p>
 
-  const canPay = account.payments_enabled && checkoutAvailable
 
   return (
     <>
-      {checkingOut && (
-        <Checkout
-          onClose={() => setCheckingOut(false)}
-          onComplete={() => {
-            setCheckingOut(false)
-            setWaiting(true)
-          }}
-        />
-      )}
       {waiting && <p className={styles.intro}>Payment received. Switching you to Pro…</p>}
       {error && <p className={styles.error}>{error}</p>}
       <div className={styles.row}>
@@ -433,9 +430,9 @@ function Billing() {
                 <button
                   type="button"
                   className={styles.primary}
-                  disabled={!canPay}
-                  title={canPay ? undefined : 'Payments are coming soon'}
-                  onClick={() => setCheckingOut(true)}
+                  disabled={!account.payments_enabled || busy}
+                  title={account.payments_enabled ? undefined : 'Payments are coming soon'}
+                  onClick={() => void upgrade()}
                 >
                   Upgrade
                 </button>

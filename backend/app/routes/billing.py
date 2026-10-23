@@ -1,8 +1,7 @@
 """Paying for Pro, through Stripe.
 
-Upgrade opens Divthink's own checkout screen, with Stripe's payment fields in it
-(Checkout Sessions in "elements" mode); Manage sends the browser to Stripe's
-customer portal (change card, cancel). Neither changes the plan itself: Stripe
+Upgrade sends the browser to Stripe's own checkout page (Checkout Sessions,
+hosted), and Manage to Stripe's customer portal (change card, cancel). Neither changes the plan itself: Stripe
 tells the webhook what happened, and the webhook is the only thing that sets
 users.plan from a payment. Card details never reach this server.
 """
@@ -30,23 +29,33 @@ class Redirect(BaseModel):
     url: str
 
 
-class CheckoutSession(BaseModel):
-    client_secret: str  # Stripe.js draws the payment fields with it
-
-
 def _client() -> stripe.StripeClient:
     if not settings.payments_enabled:
         raise HTTPException(status_code=503, detail="Payments aren't set up yet.")
     return stripe.StripeClient(settings.stripe_secret_key)
 
 
+def _app_url(path: str) -> str:
+    return f"{settings.app_url.rstrip('/')}{path}"
+
+
 def _settings_url(result: str) -> str:
-    return f"{settings.app_url.rstrip('/')}/?billing={result}"
+    return _app_url(f"/?billing={result}")
 
 
-@router.post("/checkout", response_model=CheckoutSession)
+# Stripe's checkout page in the site's colours (SiteShell.module.css).
+BRANDING = {
+    "display_name": "Divthink",
+    "background_color": "#1d1b18",
+    "button_color": "#edecec",
+    "border_style": "rounded",
+    "font_family": "inter",
+}
+
+
+@router.post("/checkout", response_model=Redirect)
 async def checkout(user_id: UUID = Depends(current_user)):
-    """A Stripe Checkout session for Pro, for the checkout screen to complete."""
+    """Stripe's checkout page for Pro, for the browser to go to."""
     client = _client()
     row = await get_pool().fetchrow(
         "SELECT email, plan, stripe_customer_id FROM users WHERE id = $1", user_id
@@ -57,13 +66,13 @@ async def checkout(user_id: UUID = Depends(current_user)):
     try:
         session = await client.v1.checkout.sessions.create_async(params={
             "mode": "subscription",
-            "ui_mode": "elements",
             "customer": customer_id,
             "client_reference_id": str(user_id),
             "line_items": [{"price": settings.stripe_price_pro, "quantity": 1}],
-            # Cards finish in place; only a payment method that has to leave for
-            # its bank comes back through this address.
-            "return_url": _settings_url("success"),
+            "success_url": _settings_url("success"),
+            # Stripe's back arrow: the plans again, to pick Free instead.
+            "cancel_url": _app_url("/plans"),
+            "branding_settings": BRANDING,
             "allow_promotion_codes": True,
             # Stripe's merchant-of-record service (it handles sales tax for a
             # 3.5% fee). Off unless chosen on purpose: when an account has it
@@ -73,7 +82,11 @@ async def checkout(user_id: UUID = Depends(current_user)):
     except stripe.StripeError:
         log.exception("could not start checkout for %s", user_id)
         raise HTTPException(status_code=502, detail="Couldn't reach Stripe. Try again.")
-    return CheckoutSession(client_secret=session.client_secret)
+    # Going to checkout is a choice made: the plans page isn't shown again.
+    await get_pool().execute(
+        "UPDATE users SET plan_chosen_at = now() WHERE id = $1 AND plan_chosen_at IS NULL", user_id
+    )
+    return Redirect(url=session.url)
 
 
 async def _new_customer(client: stripe.StripeClient, user_id: UUID, email: str) -> str:

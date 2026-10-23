@@ -8,6 +8,7 @@ CREATE TABLE users (
   auto_branch boolean NOT NULL DEFAULT true,
   plan        text NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'pro_max')),
   stripe_customer_id text UNIQUE,  -- set when they first go to checkout
+  plan_chosen_at timestamptz,  -- picked a plan after signing up (Plans.tsx); empty until then
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 

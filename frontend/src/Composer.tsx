@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import styles from './Composer.module.css'
 import { isEditing } from './dom'
 import type { Exchange } from './exchanges'
+import { openPlans } from './upgrade'
 import { ALLOWED_TYPES, useCanvasStore } from './store'
 
 const MAX_INPUT_HEIGHT = 200 // px; taller prompts scroll inside the box
@@ -157,7 +158,7 @@ function Composer({ active, merging }: Props) {
       {notice && notice === limitNotice ? (
         <div className={styles.limit}>
           <p className={styles.limitText}>{notice}</p>
-          <button type="button" className={styles.upgrade} onClick={() => openSettings('billing')}>
+          <button type="button" className={styles.upgrade} onClick={openPlans}>
             Upgrade
           </button>
         </div>

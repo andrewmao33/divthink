@@ -27,12 +27,17 @@ export async function signInWithGoogle(): Promise<string | null> {
 }
 
 // Signing in with a code sent by email: the first call sends it, the second
-// checks it. Either creates the account on first use, as Google sign-in does.
-// Each resolves to an error to show, or null.
-export async function sendEmailCode(email: string): Promise<string | null> {
+// checks it. Signing up creates the account on first use, as Google sign-in
+// does; logging in only works for an account that exists. Each resolves to an
+// error to show, or null.
+export const NO_ACCOUNT = 'There’s no account with that email.'
+
+export async function sendEmailCode(email: string, createAccount: boolean): Promise<string | null> {
   if (!supabase) return null
-  const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })
+  const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: createAccount } })
   if (!error) return null
+  // What Supabase says when logging in names an address with no account.
+  if (error.code === 'otp_disabled' || /signups not allowed/i.test(error.message)) return NO_ACCOUNT
   if (error.status === 429) return 'Too many codes asked for. Wait a minute, then try again.'
   if (error.code === 'email_address_invalid') return "That doesn't look like an email address."
   return error.message

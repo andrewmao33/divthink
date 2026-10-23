@@ -247,14 +247,20 @@ export type Account = {
   month_cost_usd: number // this month's replies, whoever's key paid
   payments_enabled: boolean // Stripe is set up, so Upgrade works
   has_subscription: boolean // Manage subscription works
+  plan_chosen: boolean // saw the plans after signing up
 }
 
 export function getAccount(): Promise<Account> {
   return request('/account')
 }
 
-// Upgrading: a Stripe Checkout session, shown inside Billing by Stripe.js.
-export function startCheckout(): Promise<{ client_secret: string }> {
+// Continuing on Free from the plans shown after signing up.
+export function choosePlanFree(): Promise<void> {
+  return request('/account/plan-chosen', { method: 'POST' })
+}
+
+// Upgrading: Stripe's own checkout page; the browser goes there.
+export function startCheckout(): Promise<{ url: string }> {
   return request('/billing/checkout', { method: 'POST' })
 }
 

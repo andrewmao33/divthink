@@ -23,6 +23,7 @@ class Account(BaseModel):
     month_cost_usd: float  # what this month's replies cost, whoever's key paid
     payments_enabled: bool  # Stripe is set up, so Upgrade works
     has_subscription: bool  # a Stripe customer exists, so Manage works
+    plan_chosen: bool  # saw the plans after signing up; until then the app shows them
 
 
 @router.get("", response_model=Account)
@@ -30,7 +31,7 @@ async def get_account(user_id: UUID = Depends(current_user)):
     """The plan, how much of it is used, and this month's spend (Settings → Billing)."""
     row = await get_pool().fetchrow(
         """
-        SELECT u.plan, u.stripe_customer_id,
+        SELECT u.plan, u.stripe_customer_id, u.plan_chosen_at,
                (SELECT count(*) FROM sessions WHERE user_id = u.id) AS canvases,
                (SELECT coalesce(sum(cost_usd), 0) FROM usage_events
                 WHERE user_id = u.id AND created_at >= date_trunc('month', now())) AS month_cost
@@ -48,7 +49,17 @@ async def get_account(user_id: UUID = Depends(current_user)):
         month_cost_usd=float(row["month_cost"]),
         payments_enabled=settings.payments_enabled,
         has_subscription=row["stripe_customer_id"] is not None,
+        plan_chosen=row["plan_chosen_at"] is not None,
     )
+
+
+@router.post("/plan-chosen", status_code=204)
+async def plan_chosen(user_id: UUID = Depends(current_user)):
+    """Continuing on Free from the plans page shown after signing up."""
+    await get_pool().execute(
+        "UPDATE users SET plan_chosen_at = now() WHERE id = $1 AND plan_chosen_at IS NULL", user_id
+    )
+    return Response(status_code=204)
 
 
 @router.delete("", status_code=204)

@@ -304,126 +304,8 @@
 
 /* ---- Pricing --------------------------------------------------------------- */
 
-/* One card per plan, side by side where there is room. */
-.plans {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-3);
+.pricingCards {
   margin-top: 56px;
-}
-
-.plan {
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-6) var(--space-4);
-  border-radius: var(--radius);
-  background: #ffffff08;
-}
-
-.planName {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 400;
-  color: var(--text);
-}
-
-.planPrice {
-  margin: var(--space-3) 0 var(--space-4);
-  font-size: 2.25rem;
-  line-height: 1;
-  color: var(--text);
-}
-
-.planPer {
-  margin-left: var(--space-1);
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-}
-
-.planButton {
-  padding: 11px var(--space-4);
-  border: 0;
-  border-radius: 999px;
-  background: #ffffff12;
-  font: inherit;
-  font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--text);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.planButton:hover:not(:disabled) {
-  background: #ffffff1f;
-}
-
-/* The plan being suggested: the one bright button on the page. */
-.planButtonBright {
-  background: var(--text);
-  color: var(--bg);
-}
-
-.planButtonBright:hover:not(:disabled) {
-  background: #ffffff;
-}
-
-.planButton:disabled {
-  color: var(--text-muted);
-  cursor: default;
-}
-
-.planButton:focus-visible {
-  outline: 1px solid var(--text);
-  outline-offset: 3px;
-}
-
-.planLead {
-  margin: var(--space-6) 0 var(--space-1);
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-}
-
-.planHeadline {
-  margin: 0;
-  font-size: 1.375rem;
-  color: var(--text);
-}
-
-.planSub {
-  margin: 2px 0 0;
-  font-size: var(--text-sm);
-  color: var(--text-soft);
-}
-
-.planPoints {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: var(--space-6) 0 0;
-  padding: var(--space-4) 0 0;
-  border-top: 1px solid var(--rule);
-  list-style: none;
-  font-size: var(--text-sm);
-  color: var(--text-soft);
-}
-
-.planPoints li {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-}
-
-.planPoints svg {
-  flex: none;
-  color: var(--text-muted);
-}
-
-.planNote {
-  margin: var(--space-6) 0 0;
-  font-size: var(--text-xs);
-  line-height: 1.5;
-  color: var(--text-muted);
 }
 
 .finePrint {
@@ -432,10 +314,4 @@
   font-size: var(--text-xs);
   line-height: 1.6;
   color: var(--text-muted);
-}
-
-@media (max-width: 900px) {
-  .plans {
-    grid-template-columns: 1fr;
-  }
 }

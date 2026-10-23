@@ -4,6 +4,7 @@ import { getAccount, listSessions, renameSession, type Account, type Session } f
 import { authEnabled } from './auth'
 import ContextMenu, { type MenuItem } from './ContextMenu'
 import styles from './Sidebar.module.css'
+import { openPlans } from './upgrade'
 import { logOut, useCanvasStore } from './store'
 
 // The bar in the top-left corner, naming the open canvas, and the drawer it
@@ -301,7 +302,7 @@ function Sidebar({ children }: { children: React.ReactNode }) {
                       className={styles.planUpgrade}
                       onClick={() => {
                         setOpen(false)
-                        openSettings('billing')
+                        openPlans()
                       }}
                     >
                       Upgrade

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Canvas from './Canvas'
 import { onLinkClick, scrollToSection } from './nav'
+import PlanCards from './PlanCards'
 import SiteShell, { type Page } from './SiteShell'
 import { useGetStarted } from './useGetStarted'
 import styles from './Landing.module.css'
@@ -34,57 +35,6 @@ const METHOD: [string, string][] = [
   ],
 ]
 
-type PricingPlan = {
-  name: string
-  price: string
-  action: 'start' | 'pro' | null // null: not available yet
-  actionLabel: string
-  lead: string // "Everything in Free, and:"
-  headline: string // the one big thing this plan gives
-  sub: string
-  points: string[]
-  note?: string
-}
-
-const PRICING: PricingPlan[] = [
-  {
-    name: 'Free',
-    price: '$0',
-    action: 'start',
-    actionLabel: 'Get started',
-    lead: 'Get started with:',
-    headline: '5 canvases',
-    sub: 'with up to 50 cards each',
-    points: ['Branch, merge and keep threads side by side', 'Claude and Gemini, picked per reply', 'Web search, images and PDFs'],
-    note: 'Model use is billed by your provider, to your own API key.',
-  },
-  {
-    name: 'Pro',
-    price: '$8',
-    action: 'pro',
-    actionLabel: 'Get Pro',
-    lead: 'Everything in Free, and:',
-    headline: 'Unlimited',
-    sub: 'canvases and cards',
-    points: ['No limit on how many canvases you keep', 'No limit on cards in a canvas', 'Cancel anytime'],
-    note: 'Model use is billed by your provider, to your own API key.',
-  },
-  {
-    name: 'Pro Max',
-    price: '$20',
-    action: null,
-    actionLabel: 'Coming soon',
-    lead: 'Everything in Pro, and:',
-    headline: 'No API key',
-    sub: 'model use included',
-    points: ['Start a canvas the moment you sign in', 'A monthly allowance of model use', 'Bring your own key for more'],
-  },
-]
-
-// Read by the canvas after sign-in: "Get Pro" should land on Billing, not just
-// the canvas. Session storage survives the sign-in, including Google's redirect.
-const AFTER_SIGN_IN_KEY = 'divthink.after-sign-in'
-
 const FAQ: [string, string][] = [
   [
     'Which models can I use?',
@@ -115,7 +65,7 @@ const FAQ: [string, string][] = [
 // The signed-out home page: one long page of sections, which the menu scrolls
 // between and follows.
 function Landing() {
-  const { start } = useGetStarted()
+  const { start, startPro } = useGetStarted()
   const [current, setCurrent] = useState<Page>('home')
 
   // Arriving at an address that names a section (divthink.com/#pricing): the
@@ -189,48 +139,16 @@ function Landing() {
         <p className={styles.intro}>
           Start free with your own Anthropic or Google key. Upgrade when you need more room.
         </p>
-        <div className={styles.plans}>
-          {PRICING.map((plan) => (
-            <div key={plan.name} className={styles.plan}>
-              <h3 className={styles.planName}>{plan.name}</h3>
-              <p className={styles.planPrice}>
-                {plan.price}
-                <span className={styles.planPer}>/month</span>
-              </p>
-              <button
-                type="button"
-                className={`${styles.planButton} ${plan.action === 'pro' ? styles.planButtonBright : ''}`}
-                disabled={plan.action === null}
-                onClick={() => {
-                  if (plan.action === 'pro') {
-                    try {
-                      window.sessionStorage.setItem(AFTER_SIGN_IN_KEY, 'billing')
-                    } catch {
-                      // Storage blocked: they'll land on the canvas instead.
-                    }
-                  }
-                  start()
-                }}
-              >
-                {plan.actionLabel}
-              </button>
-              <p className={styles.planLead}>{plan.lead}</p>
-              <p className={styles.planHeadline}>{plan.headline}</p>
-              <p className={styles.planSub}>{plan.sub}</p>
-              <ul className={styles.planPoints}>
-                {plan.points.map((point) => (
-                  <li key={point}>
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-                      <path d="M2.5 6.5l2.5 2.5 4.5-6" />
-                    </svg>
-                    {point}
-                  </li>
-                ))}
-              </ul>
-              {plan.note && <p className={styles.planNote}>{plan.note}</p>}
-            </div>
-          ))}
-        </div>
+        <PlanCards
+          className={styles.pricingCards}
+          button={(plan) =>
+            plan.id === 'free'
+              ? { label: 'Get started', onClick: start }
+              : plan.id === 'pro'
+                ? { label: 'Get Pro', bright: true, onClick: startPro }
+                : { label: 'Coming soon', disabled: true }
+          }
+        />
         <p className={styles.finePrint}>
           Prices in US dollars. On Free and Pro, Anthropic or Google bill you directly for model
           use, at their own rates. Cancel Pro anytime: it lasts until the end of the month you

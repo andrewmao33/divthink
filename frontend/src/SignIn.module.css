@@ -1,10 +1,27 @@
-/* The sign-in page: one narrow column inside the site frame. Uses the colour
-   variables SiteShell sets on the page. The heading starts where the home
-   page's headline does, level with the menu. */
+/* Sign up and log in: a page of their own, one narrow column centred in the
+   window. The ground, colours and grain come from SiteShell (bare). */
 
-.page {
-  max-width: 360px;
-  padding: 146px 0 200px;
+.column {
+  width: 100%;
+  max-width: calc(360px + 2 * var(--space-4)); /* 360px of content */
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 64px var(--space-4);
+  justify-content: center;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+}
+
+.markLink {
+  align-self: center;
+  margin-bottom: 28px;
+}
+
+.mark {
+  display: block;
+  width: 44px;
+  height: 44px;
 }
 
 .title {
@@ -18,15 +35,15 @@
 }
 
 .note {
-  margin: var(--space-3) 0 40px;
+  margin: var(--space-2) 0 32px;
   font-size: var(--text-sm);
   line-height: 20px;
-  color: var(--text-soft);
+  color: var(--text-muted);
 }
 
 .address {
   font-weight: 500;
-  color: var(--text);
+  color: var(--text-soft);
   overflow-wrap: anywhere;
 }
 
@@ -40,6 +57,7 @@
   border-radius: 10px;
   font: inherit;
   font-size: var(--text-sm);
+  box-sizing: border-box;
 }
 
 .google,
@@ -47,7 +65,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
   cursor: pointer;
   transition:
     background 0.15s,
@@ -55,14 +72,22 @@
     opacity 0.15s;
 }
 
+/* The mark sits at the left edge; the words stay centred in the button. */
 .google {
-  border: 1px solid #ffffff2e;
+  position: relative;
+  border: 1px solid #ffffff1f;
   background: #ffffff0a;
+  font-weight: 500;
   color: var(--text);
 }
 
+.google svg {
+  position: absolute;
+  left: 14px;
+}
+
 .google:hover:not(:disabled) {
-  border-color: #ffffff47;
+  border-color: #ffffff38;
   background: #ffffff14;
 }
 
@@ -85,13 +110,14 @@
   cursor: default;
 }
 
-/* "or", on a hairline that runs either side of it. */
+/* "OR", on a hairline that runs either side of it. */
 .or {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin: 28px 0;
-  font-size: 0.75rem;
+  margin: 24px 0;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
   color: var(--text-muted);
 }
 
@@ -108,17 +134,12 @@
   flex-direction: column;
 }
 
-.label {
-  margin-bottom: var(--space-2);
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
 .input {
   padding: 0 14px;
   border: 1px solid #ffffff1f;
   background: #00000033;
   color: var(--text);
+  text-align: left;
   transition: border-color 0.15s;
 }
 
@@ -136,11 +157,21 @@
   font-family: var(--font-mono);
   font-size: 1rem;
   letter-spacing: 0.3em;
+  text-align: center;
+}
+
+.code::placeholder {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  letter-spacing: 0;
 }
 
 .google:focus-visible,
 .primary:focus-visible,
 .link:focus-visible,
+.markLink:focus-visible,
+.switch a:focus-visible,
+.error a:focus-visible,
 .fine a:focus-visible {
   outline: 1px solid var(--text);
   outline-offset: 3px;
@@ -176,7 +207,7 @@
   cursor: default;
 }
 
-/* ---- Messages ------------------------------------------------------------------ */
+/* ---- Messages and links ---------------------------------------------------- */
 
 .error {
   margin: var(--space-4) 0 0;
@@ -185,9 +216,33 @@
   color: var(--error);
 }
 
+.error a {
+  color: var(--text);
+  text-underline-offset: 3px;
+}
+
+/* "Already have an account? Log in" */
+.switch {
+  margin: 28px 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.switch a {
+  font-weight: 500;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.switch a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .fine {
   margin: 40px 0 0;
   font-size: 0.75rem;
+  line-height: 1.5;
   color: var(--text-muted);
 }
 
@@ -198,10 +253,4 @@
 
 .fine a:hover {
   color: var(--text);
-}
-
-@media (max-width: 1000px) {
-  .page {
-    padding: 72px 0 120px;
-  }
 }

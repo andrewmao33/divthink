@@ -3,9 +3,7 @@ import { onLinkClick } from './nav'
 import { useGetStarted } from './useGetStarted'
 import styles from './SiteShell.module.css'
 
-const GITHUB_URL = 'https://github.com/andrewmao33/divthink'
-
-export type Page = 'home' | 'method' | 'pricing' | 'faq' | 'privacy' | 'terms' | 'sign-in'
+export type Page = 'home' | 'method' | 'pricing' | 'faq' | 'privacy' | 'terms'
 
 // The menu, top-left on every page. All four are parts of the home page: the
 // top of it, then sections further down. The footer repeats all but the first.
@@ -18,8 +16,10 @@ const PAGES: { page: Page; href: string; label: string }[] = [
 
 // The frame around every public page: the menu top-left, "Sign in"
 // top-right and the footer stay put, and the page itself goes in between.
-function SiteShell({ current, children }: { current: Page; children?: ReactNode }) {
-  const { start } = useGetStarted()
+// `bare` keeps only the ground (colours and grain), for pages that stand on
+// their own: signing in, picking a plan.
+function SiteShell({ current, bare, children }: { current?: Page; bare?: boolean; children?: ReactNode }) {
+  const { logIn } = useGetStarted()
 
   // The window behind the page is light for the canvas and dark for these pages
   // (index.html, "site-dark"). index.html guesses which before anything loads;
@@ -28,6 +28,15 @@ function SiteShell({ current, children }: { current: Page; children?: ReactNode 
     document.documentElement.classList.add('site-dark')
     return () => document.documentElement.classList.remove('site-dark')
   }, [])
+
+  if (bare) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.backdrop} />
+        <div className={styles.sheet}>{children}</div>
+      </div>
+    )
+  }
 
   return (
     <div className={styles.page}>
@@ -63,7 +72,7 @@ function SiteShell({ current, children }: { current: Page; children?: ReactNode 
           {/* Signing in and signing up are the same step (Google or an emailed
               code), so one button covers both. */}
           <div className={styles.corner}>
-            <button type="button" className={styles.signIn} onClick={start}>
+            <button type="button" className={styles.signIn} onClick={logIn}>
               Sign in
             </button>
           </div>
@@ -79,6 +88,10 @@ function SiteShell({ current, children }: { current: Page; children?: ReactNode 
 
             <footer className={styles.footer}>
               <div className={styles.footerLinks}>
+                <a className={styles.footerMark} href="/" onClick={onLinkClick}>
+                  <img className={styles.mark} src="/logo.svg" alt="" />
+                  Divthink
+                </a>
                 <ul>
                   {PAGES.slice(1).map(({ page, href, label }) => (
                     <li key={page}>
@@ -87,16 +100,6 @@ function SiteShell({ current, children }: { current: Page; children?: ReactNode 
                       </a>
                     </li>
                   ))}
-                </ul>
-                <ul>
-                  <li>
-                    <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener">
-                      GitHub
-                      <span className={styles.external} aria-hidden="true">
-                        ↗
-                      </span>
-                    </a>
-                  </li>
                 </ul>
                 <ul>
                   <li>
