@@ -83,5 +83,16 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <!-- Cloudflare Web Analytics: counts page visits, no cookies. Loaded only on
+         the real site, so local development doesn't show up as visits. -->
+    <script>
+      if (location.hostname === 'divthink.com') {
+        var beacon = document.createElement('script')
+        beacon.defer = true
+        beacon.src = 'https://static.cloudflareinsights.com/beacon.min.js'
+        beacon.setAttribute('data-cf-beacon', '{"token": "93e4d458494f40e8ad674f5678961a92"}')
+        document.body.appendChild(beacon)
+      }
+    </script>
   </body>
 </html>

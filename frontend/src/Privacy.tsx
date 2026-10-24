@@ -8,7 +8,7 @@ function Privacy() {
     <SiteShell current="privacy">
       <article className={styles.article}>
         <h1 className={styles.title}>Privacy Policy</h1>
-        <p className={styles.updated}>Last updated · October 14, 2026</p>
+        <p className={styles.updated}>Last updated · October 23, 2026</p>
 
         <div className={styles.body}>
           <p>
@@ -19,7 +19,8 @@ function Privacy() {
           <p>
             The short version: Divthink stores your account, your canvases and your API keys so
             the app can work. It sends your conversations to the AI provider you choose so they
-            can be answered. It does not sell your data, show ads, or track you.
+            can be answered. It counts page visits without cookies, and does not sell your data
+            or show ads.
           </p>
 
           <h2>1. What Divthink stores</h2>
@@ -63,7 +64,8 @@ function Privacy() {
               use is paid to your AI provider directly, through your own account with them.
             </li>
             <li>
-              <strong>No advertising or analytics trackers.</strong>
+              <strong>No advertising trackers, and no tracking cookies.</strong> Page visits are
+              counted anonymously, as described below.
             </li>
           </ul>
 
@@ -83,6 +85,12 @@ function Privacy() {
               Railway runs the server, and Supabase provides the database and sign-in,
               including the emails that carry sign-in codes. They hold your data only to
               provide those services.
+            </li>
+            <li>
+              <strong>Cloudflare, which counts page visits.</strong> It sees which page was
+              opened, the site that linked to it, how fast the page loaded, and the visitor's
+              country, browser and device type. It uses no cookies and is not tied to your
+              account or your canvases.
             </li>
             <li>
               <strong>Stripe, if you subscribe to Pro.</strong> Stripe receives your email
