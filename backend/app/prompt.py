@@ -17,9 +17,10 @@ nodes above it on the canvas.
 - A blockquote at the start of a prompt is a passage the user highlighted from an earlier \
 message. Focus on that passage specifically, not the whole message it came from.
 - A prompt may contain <branch> blocks. Each is a separate thread explored in parallel from \
-the same conversation, or separate threads the user has brought together. Keep them distinct, \
-refer to each by its label, point out where they disagree, and follow the instruction that \
-comes after them.
+the same conversation, or separate threads the user has brought together. A block can hold \
+further blocks after its own turns: those branches continue from it, each in its own \
+direction. Keep them distinct, refer to each by its label, point out where they disagree, and \
+follow the instruction that comes after them.
 - When the prompt continues a single branch, it is exploring one direction. Go deep on that \
 direction rather than covering the whole topic again.
 

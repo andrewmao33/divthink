@@ -1,5 +1,7 @@
 import heapq
 from collections import defaultdict
+from collections.abc import Iterator
+from itertools import count
 from uuid import UUID
 
 import asyncpg
@@ -117,13 +119,9 @@ def _merged(
         _append(messages, message.role, message.content)
 
     # Everything after the branches goes in one final user message.
-    tail: list[str] = []
-    for number, (head, seen) in enumerate(zip(branch_heads, reachable, strict=True), start=1):
-        only_here = seen - shared
-        if not only_here:  # a selected node that is an ancestor of another one
-            continue
-        turns = _to_messages(_oldest_first(_subset(nodes, only_here), edges))
-        tail.append(_branch_block(_label(turns, number), turns))
+    tail = _branch_blocks(
+        nodes, edges, branch_heads, dict(zip(branch_heads, reachable, strict=True)), shared, count(1)
+    )
 
     target = nodes[target_id]
     quote = _highlight_of(target)
@@ -132,6 +130,73 @@ def _merged(
     tail.append(target["content"].strip())
     _append(messages, "user", "\n\n".join(part for part in tail if part))
     return messages
+
+
+def _branch_blocks(
+    nodes: dict,
+    edges: list,
+    heads: list[UUID],
+    reachable: dict[UUID, set[UUID]],
+    emitted: set[UUID],
+    numbers: Iterator[int],
+) -> list[str]:
+    """The branches below what has already been written (`emitted`), as blocks.
+
+    Branches that share history beyond it are one block: that shared part once,
+    then a block nested inside for each way it splits. Without this, merging
+    three branches where two split late would copy the two's common part into
+    both of their blocks.
+    """
+    rest = {head: reachable[head] - emitted for head in heads}
+    # A selected node that is an ancestor of another one adds nothing of its own.
+    heads = [head for head in heads if rest[head]]
+
+    def turns_of(ids: set[UUID]) -> list[Message]:
+        return _to_messages(_oldest_first(_subset(nodes, ids), edges))
+
+    blocks: list[str] = []
+    for group in _overlapping(heads, rest):
+        common = set.intersection(*(rest[head] for head in group))
+        if len(group) == 1 or not common:
+            # On its own; or tied to the others only through a merge further up
+            # inside the branches, which nesting can't express: written out in full.
+            for head in group:
+                turns = turns_of(rest[head])
+                blocks.append(_branch_block(_label(turns, next(numbers)), turns))
+            continue
+        if sum(1 for head in group if rest[head] - common) <= 1:
+            # Only one of them goes on past the shared part (the others are cards
+            # above it): no split, so one block for the whole line.
+            turns = turns_of(set.union(*(rest[head] for head in group)))
+            blocks.append(_branch_block(_label(turns, next(numbers)), turns))
+            continue
+        turns = turns_of(common)
+        inner = _branch_blocks(nodes, edges, group, reachable, emitted | common, numbers)
+        blocks.append(_branch_block(_label(turns, next(numbers)), turns, inner))
+    return blocks
+
+
+def _overlapping(heads: list[UUID], rest: dict[UUID, set[UUID]]) -> list[list[UUID]]:
+    """Heads grouped by shared history: two are together if their remaining
+    ancestors overlap, directly or through another head. Groups and the heads in
+    them keep the order of `heads`, so the result is the same on every request."""
+    group_of = {head: i for i, head in enumerate(heads)}
+
+    def root(i: int) -> int:
+        while group_of[heads[i]] != i:
+            i = group_of[heads[i]]
+        return i
+
+    for i, a in enumerate(heads):
+        for b in heads[i + 1 :]:
+            if rest[a] & rest[b]:
+                ra, rb = root(group_of[a]), root(group_of[b])
+                group_of[heads[max(ra, rb)]] = min(ra, rb)
+
+    groups: dict[int, list[UUID]] = {}
+    for i, head in enumerate(heads):
+        groups.setdefault(root(i), []).append(head)
+    return list(groups.values())
 
 
 def _ancestors_of(start: UUID, parents_of: dict[UUID, list[UUID]]) -> set[UUID]:
@@ -150,11 +215,13 @@ def _subset(nodes: dict, ids: set[UUID]) -> dict:
     return {node_id: nodes[node_id] for node_id in ids}
 
 
-def _branch_block(label: str, turns: list[Message]) -> str:
+def _branch_block(label: str, turns: list[Message], inner: list[str] | None = None) -> str:
     """One branch, flattened. It sits inside a user message, so the turns are
-    labelled rather than carrying real roles."""
+    labelled rather than carrying real roles. `inner` are the branches it splits
+    into, nested after its own turns."""
     body = "\n\n".join(
-        f"{'Prompt' if turn.role == 'user' else 'Reply'}: {turn.content}" for turn in turns
+        [f"{'Prompt' if turn.role == 'user' else 'Reply'}: {turn.content}" for turn in turns]
+        + (inner or [])
     )
     return f'<branch label="{label}">\n{body}\n</branch>'
 
