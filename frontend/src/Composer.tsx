@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import styles from './Composer.module.css'
 import { isEditing } from './dom'
 import type { Exchange } from './exchanges'
+import ModelOptions from './ModelOptions'
 import { openPlans } from './upgrade'
 import { ALLOWED_TYPES, useCanvasStore } from './store'
 
@@ -265,18 +266,14 @@ function Composer({ active, merging }: Props) {
             <path d="M9.5 4 5 8.5a2.1 2.1 0 0 0 3 3l4.5-4.5a3.5 3.5 0 0 0-5-5L3 6.5a5 5 0 0 0 7 7L13.5 10" />
           </svg>
         </button>
-        {model && models.length > 0 && (
+        {model && models.some((m) => m.available) && (
           <select
             className={styles.model}
             value={model}
             onChange={(e) => setModel(e.target.value)}
             aria-label="Model"
           >
-            {models.map((m) => (
-              <option key={m.id} value={m.id} disabled={!m.available}>
-                {m.available ? m.label : `${m.label} (no API key)`}
-              </option>
-            ))}
+            <ModelOptions models={models} />
           </select>
         )}
         {merging ? (

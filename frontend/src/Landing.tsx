@@ -38,7 +38,7 @@ const METHOD: [string, string][] = [
 const FAQ: [string, string][] = [
   [
     'Which models can I use?',
-    'Claude Sonnet 5, Claude Opus 5 and Gemini 3.6 Flash. You choose the model each time you send a prompt.',
+    'Every current Claude model, from Haiku to Opus and Fable, and Gemini 3.6 Flash. You choose the model each time you send a prompt, from the ones your API key can use.',
   ],
   [
     'Do I need an API key?',

@@ -55,7 +55,10 @@ async def _claude(source: str, model: str, api_key: str) -> tuple[str | None, Us
     try:
         reply = await client.messages.create(
             model=model,
-            max_tokens=32,
+            # Newer models think before answering, even for a title, and thinking
+            # counts against max_tokens: room for it, and low effort so it stays short.
+            max_tokens=1024,
+            output_config={"effort": "low"},
             system=INSTRUCTION,
             messages=[{"role": "user", "content": source}],
         )

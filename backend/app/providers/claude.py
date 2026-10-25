@@ -63,6 +63,10 @@ async def stream(
         # Adaptive: Claude decides whether to think. "summarized" returns readable
         # thinking; the default on current models streams it with empty text.
         "thinking": {"type": "adaptive", "display": "summarized"},
+        # Automatic caching: everything up to the last message is cached for five
+        # minutes, so a follow-up (or a branch from the same card) reads the thread
+        # above it at a tenth of the price instead of paying for it again.
+        "cache_control": {"type": "ephemeral"},
     }
     if web_search:
         request["tools"] = [WEB_SEARCH_TOOL]
