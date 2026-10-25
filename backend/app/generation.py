@@ -17,7 +17,9 @@ from .usage import record as record_usage
 
 log = logging.getLogger(__name__)
 
-MAX_CONCURRENT = 5  # design.md, "Concurrency"
+# Replies being written at once, across every user: a cap on the server's memory,
+# not on any one person (routes/generate.py limits each user to a few).
+MAX_CONCURRENT = 30
 
 # Provider name (from providers/catalog.py) -> its stream function
 # (model, messages, api_key, system).

@@ -34,6 +34,8 @@ MAX_ATTACHMENTS = 8
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 MAX_PDF_BYTES = 16 * 1024 * 1024  # PDFs are bigger; Anthropic's request cap is 32 MB
 MAX_ATTACHMENTS_BYTES = 24 * 1024 * 1024  # all of them together
+MAX_RUNNING_PER_USER = 3  # replies one person can have being written at once
+MAX_PROMPTS_PER_MINUTE = 20  # per user; only a script or a stuck key gets near it
 # Text is counted in characters and turned into tokens at a rate that errs high,
 # and only most of the window is offered, leaving room for the reply itself.
 CHARS_PER_TOKEN = 3
@@ -123,6 +125,13 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
 
     async with get_pool().acquire() as conn:
         async with conn.transaction():
+            # One send at a time per user, so two sends at the same moment can't
+            # both see room for one more reply. Taken before the session lock, so
+            # every send locks in the same order.
+            await conn.execute("SELECT 1 FROM users WHERE id = $1 FOR UPDATE", user_id)
+            await _check_running(conn, user_id)
+            await _check_rate(conn, user_id)
+
             # Locking the session row makes concurrent sends to the same canvas
             # take turns, so they don't compute the same positions.
             session = await conn.fetchrow(
@@ -245,6 +254,48 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
         assistant_node_id=assistant_id,
         session_title=session_title,
     )
+
+
+async def _check_running(conn: asyncpg.Connection, user_id: UUID) -> None:
+    """Refuse a new reply while this user already has MAX_RUNNING_PER_USER being written."""
+    running = await conn.fetchval(
+        """
+        SELECT count(*) FROM nodes n
+        JOIN sessions s ON s.id = n.session_id
+        WHERE s.user_id = $1
+          AND n.type = 'assistant'
+          AND n.status IN ('pending', 'streaming')
+        """,
+        user_id,
+    )
+    if running >= MAX_RUNNING_PER_USER:
+        raise HTTPException(
+            status_code=429,
+            detail=f"You have {running} replies being written. Wait for one to finish.",
+        )
+
+
+async def _check_rate(conn: asyncpg.Connection, user_id: UUID) -> None:
+    """Refuse a prompt once this user has sent MAX_PROMPTS_PER_MINUTE in the last minute.
+
+    Counted from the prompts themselves, so it needs no state of its own. Prompts
+    deleted since don't count, which only matters to someone trying to get round it.
+    """
+    recent = await conn.fetchval(
+        """
+        SELECT count(*) FROM nodes n
+        JOIN sessions s ON s.id = n.session_id
+        WHERE s.user_id = $1
+          AND n.type = 'user'
+          AND n.created_at > now() - interval '1 minute'
+        """,
+        user_id,
+    )
+    if recent >= MAX_PROMPTS_PER_MINUTE:
+        raise HTTPException(
+            status_code=429,
+            detail="You're sending prompts too quickly. Wait a moment and try again.",
+        )
 
 
 def _decoded(attachments: list[Attachment]) -> list[tuple[str, bytes, str]]:
