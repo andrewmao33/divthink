@@ -122,6 +122,66 @@
   border-top: 1px solid var(--color-border);
 }
 
+/* Privacy: sections that fold open and closed. */
+.disclosure {
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-3) 0;
+}
+
+.disclosure summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.disclosure summary::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin-right: 4px;
+  border-right: 1.5px solid var(--color-text-muted);
+  border-bottom: 1.5px solid var(--color-text-muted);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 0.15s;
+}
+
+.disclosure:not([open]) summary::after {
+  transform: rotate(-45deg);
+}
+
+.disclosure ul {
+  margin: var(--space-2) 0 var(--space-1);
+  padding-left: 20px;
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--color-text-soft);
+}
+
+.disclosure li + li {
+  margin-top: 6px;
+}
+
+.intro a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+
+/* The picture beside its title, in the profile picture row. */
+.picture {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .rowTitle {
   margin: 0;
   font-size: var(--text-sm);

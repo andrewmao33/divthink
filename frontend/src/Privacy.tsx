@@ -8,7 +8,7 @@ function Privacy() {
     <SiteShell current="privacy">
       <article className={styles.article}>
         <h1 className={styles.title}>Privacy Policy</h1>
-        <p className={styles.updated}>Last updated · October 23, 2026</p>
+        <p className={styles.updated}>Last updated · October 25, 2026</p>
 
         <div className={styles.body}>
           <p>
@@ -28,6 +28,11 @@ function Privacy() {
             <li>
               <strong>Your account.</strong> Your email address, and the account ID that Google
               provides if you sign in with Google. Divthink never sees your Google password.
+            </li>
+            <li>
+              <strong>Your name and profile picture.</strong> From your Google account if you
+              sign in with Google, or a picture you upload under Settings → Account, which you
+              can remove there at any time.
             </li>
             <li>
               <strong>Your canvases.</strong> The prompts you write, the replies the models

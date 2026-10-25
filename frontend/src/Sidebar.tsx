@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { getAccount, listSessions, renameSession, type Account, type Session } from './api'
 import { authEnabled } from './auth'
+import Avatar from './Avatar'
 import ContextMenu, { type MenuItem } from './ContextMenu'
+import { loadProfile, type Profile } from './profile'
 import styles from './Sidebar.module.css'
 import { openPlans } from './upgrade'
 import { logOut, useCanvasStore } from './store'
@@ -77,25 +79,50 @@ function Sidebar({ children }: { children: React.ReactNode }) {
   }
   const [sessions, setSessions] = useState<Session[] | null>(null)
   const [failed, setFailed] = useState(false)
-  // The plan, for the line above Settings. Fetched each time the drawer opens,
-  // so a fresh upgrade or a new canvas shows.
+  // The plan and picture, for the account button at the bottom. Fetched each
+  // time the drawer opens, so a fresh upgrade or a new picture shows.
   const [account, setAccount] = useState<Account | null>(null)
+  const [profile, setProfile] = useState<Profile | null>(null)
+  // The menu above the account button.
+  const [accountOpen, setAccountOpen] = useState(false)
+  const accountRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
     let cancelled = false
-    getAccount().then(
-      (a) => {
-        if (!cancelled) setAccount(a)
-      },
-      () => {
-        // Leave the line out rather than show a wrong plan.
-      },
-    )
+    getAccount()
+      .catch(() => null) // leave the plan out rather than show a wrong one
+      .then(async (a) => {
+        const p = await loadProfile(a)
+        if (cancelled) return
+        setAccount(a)
+        setProfile(p)
+      })
     return () => {
       cancelled = true
     }
   }, [open])
+
+  // The account menu closes on a click anywhere outside it, and with the drawer.
+  useEffect(() => {
+    if (!accountOpen) return
+    const onPointerDown = (e: PointerEvent) => {
+      if (!accountRef.current?.contains(e.target as globalThis.Node)) setAccountOpen(false)
+    }
+    window.addEventListener('pointerdown', onPointerDown)
+    return () => window.removeEventListener('pointerdown', onPointerDown)
+  }, [accountOpen])
+
+  useEffect(() => {
+    if (!open) setAccountOpen(false)
+  }, [open])
+
+  // A choice in the account menu closes the menu and the drawer, then acts.
+  function pick(action: () => void) {
+    setAccountOpen(false)
+    setOpen(false)
+    action()
+  }
 
   // Refetched whenever the open canvas or its title changes, so a new canvas
   // appears immediately and a title set by the first prompt updates in place.
@@ -121,11 +148,13 @@ function Sidebar({ children }: { children: React.ReactNode }) {
     if (!open) return
     const onKeyDown = (e: KeyboardEvent) => {
       // One thing at a time: a menu or a rename in the drawer closes first.
-      if (e.key === 'Escape' && !menu && !renaming) setOpen(false)
+      if (e.key !== 'Escape' || menu || renaming) return
+      if (accountOpen) setAccountOpen(false)
+      else setOpen(false)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open, menu, renaming])
+  }, [open, menu, renaming, accountOpen])
 
   return (
     <div className={styles.shell}>
@@ -284,47 +313,36 @@ function Sidebar({ children }: { children: React.ReactNode }) {
               )}
             </div>
 
-            <div className={styles.footer}>
-              {account && (
-                <div className={styles.plan}>
-                  <span className={styles.planText}>
-                    {account.plan_label} plan
-                    {account.canvas_limit !== null && (
-                      <span className={styles.planUsage}>
-                        {' '}
-                        · {account.canvases} of {account.canvas_limit} canvases
-                      </span>
-                    )}
-                  </span>
-                  {account.plan === 'free' && (
-                    <button
-                      type="button"
-                      className={styles.planUpgrade}
-                      onClick={() => {
-                        setOpen(false)
-                        openPlans()
-                      }}
-                    >
-                      Upgrade
-                    </button>
+            <div className={styles.footer} ref={accountRef}>
+              {accountOpen && (
+                <div className={styles.accountMenu} role="menu">
+                  {profile?.email && <p className={styles.accountEmail}>{profile.email}</p>}
+                  <MenuButton icon={<GearIcon />} label="Settings" onClick={() => pick(() => openSettings())} />
+                  {account?.plan === 'free' && (
+                    <MenuButton icon={<UpgradeIcon />} label="Upgrade plan" onClick={() => pick(openPlans)} />
+                  )}
+                  {authEnabled && (
+                    <>
+                      <div className={styles.accountDivider} />
+                      <MenuButton icon={<LogOutIcon />} label="Log out" onClick={logOut} />
+                    </>
                   )}
                 </div>
               )}
               <button
                 type="button"
-                className={styles.footerItem}
-                onClick={() => {
-                  setOpen(false)
-                  openSettings()
-                }}
+                className={styles.accountButton}
+                aria-haspopup="menu"
+                aria-expanded={accountOpen}
+                onClick={() => setAccountOpen((v) => !v)}
               >
-                Settings
+                <Avatar name={profile?.name ?? ''} picture={profile?.picture ?? null} size={26} />
+                <span className={styles.accountName}>{profile?.name ?? ''}</span>
+                {account && <span className={styles.accountPlan}>· {account.plan_label}</span>}
+                <svg className={styles.chevron} width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                  <path d={accountOpen ? 'M3 7.5l3-3 3 3' : 'M3 4.5l3 3 3-3'} />
+                </svg>
               </button>
-              {authEnabled && (
-                <button type="button" className={styles.footerItem} onClick={logOut}>
-                  Log out
-                </button>
-              )}
             </div>
           </aside>
           {menu && (
@@ -333,6 +351,50 @@ function Sidebar({ children }: { children: React.ReactNode }) {
         </>
       )}
     </div>
+  )
+}
+
+function MenuButton({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button type="button" className={styles.accountItem} role="menuitem" onClick={onClick}>
+      {icon}
+      {label}
+    </button>
+  )
+}
+
+// Line icons for the account menu, 16px, drawn in the text colour.
+function Icon({ children }: { children: ReactNode }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {children}
+    </svg>
+  )
+}
+
+function GearIcon() {
+  return (
+    <Icon>
+      <circle cx="8" cy="8" r="2" />
+      <path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" />
+    </Icon>
+  )
+}
+
+function UpgradeIcon() {
+  return (
+    <Icon>
+      <circle cx="8" cy="8" r="6.5" />
+      <path d="M8 11V5M5.5 7.5L8 5l2.5 2.5" />
+    </Icon>
+  )
+}
+
+function LogOutIcon() {
+  return (
+    <Icon>
+      <path d="M6.5 2.5h-3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3M10.5 11L13.5 8l-3-3M13.5 8H6" />
+    </Icon>
   )
 }
 

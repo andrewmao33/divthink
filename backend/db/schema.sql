@@ -9,6 +9,7 @@ CREATE TABLE users (
   plan        text NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'pro_max')),
   stripe_customer_id text UNIQUE,  -- set when they first go to checkout
   plan_chosen_at timestamptz,  -- picked a plan after signing up (Plans.tsx); empty until then
+  avatar      text,  -- profile picture as a small data URL (Settings → Account); empty = default
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 

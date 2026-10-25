@@ -41,7 +41,7 @@ export type PendingFile = {
 // A delete waiting to be confirmed. `label` names the card in the question.
 type PendingDelete = { nodeIds: string[]; label: string }
 
-export type SettingsSection = 'general' | 'account' | 'keys' | 'billing'
+export type SettingsSection = 'general' | 'account' | 'privacy' | 'keys' | 'billing'
 
 type CanvasState = {
   status: LoadStatus

@@ -248,10 +248,20 @@ export type Account = {
   payments_enabled: boolean // Stripe is set up, so Upgrade works
   has_subscription: boolean // Manage subscription works
   plan_chosen: boolean // saw the plans after signing up
+  avatar: string | null // data URL of a picture chosen in Settings; null = the default
 }
 
 export function getAccount(): Promise<Account> {
   return request('/account')
+}
+
+// The profile picture, as a data URL already shrunk by the browser (profile.ts).
+export function setAvatar(image: string): Promise<void> {
+  return request('/account/avatar', { method: 'PUT', body: JSON.stringify({ image }) })
+}
+
+export function removeAvatar(): Promise<void> {
+  return request('/account/avatar', { method: 'DELETE' })
 }
 
 // Continuing on Free from the plans shown after signing up.

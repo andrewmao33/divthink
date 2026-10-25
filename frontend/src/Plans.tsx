@@ -78,12 +78,20 @@ function Plans({ userId }: { userId: string }) {
     <SiteShell bare>
       <div className={styles.column}>
         <header className={styles.top}>
+          {/* Leaving the plans shown after signing up is choosing Free, so they
+              aren't shown again; otherwise it just goes back. */}
+          <button
+            type="button"
+            className={styles.back}
+            disabled={busy !== null}
+            onClick={firstTime ? () => void free() : leavePlans}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M11 7H3M6.5 3.5L3 7l3.5 3.5" />
+            </svg>
+            Back
+          </button>
           <img className={styles.mark} src="/logo.svg" alt="Divthink" />
-          {account && !firstTime && (
-            <button type="button" className={styles.back} onClick={leavePlans}>
-              Back to Divthink
-            </button>
-          )}
         </header>
 
         <h1 className={styles.title}>{firstTime ? 'Welcome. Pick a plan' : 'Plans'}</h1>

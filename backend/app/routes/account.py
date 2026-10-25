@@ -2,7 +2,7 @@ from uuid import UUID
 
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..auth import current_user, forget_user, supabase_logins
 from ..config import settings
@@ -24,6 +24,7 @@ class Account(BaseModel):
     payments_enabled: bool  # Stripe is set up, so Upgrade works
     has_subscription: bool  # a Stripe customer exists, so Manage works
     plan_chosen: bool  # saw the plans after signing up; until then the app shows them
+    avatar: str | None  # data URL of a picture chosen in Settings; None = the default
 
 
 @router.get("", response_model=Account)
@@ -31,7 +32,7 @@ async def get_account(user_id: UUID = Depends(current_user)):
     """The plan, how much of it is used, and this month's spend (Settings → Billing)."""
     row = await get_pool().fetchrow(
         """
-        SELECT u.plan, u.stripe_customer_id, u.plan_chosen_at,
+        SELECT u.plan, u.stripe_customer_id, u.plan_chosen_at, u.avatar,
                (SELECT count(*) FROM sessions WHERE user_id = u.id) AS canvases,
                (SELECT coalesce(sum(cost_usd), 0) FROM usage_events
                 WHERE user_id = u.id AND created_at >= date_trunc('month', now())) AS month_cost
@@ -50,7 +51,34 @@ async def get_account(user_id: UUID = Depends(current_user)):
         payments_enabled=settings.payments_enabled,
         has_subscription=row["stripe_customer_id"] is not None,
         plan_chosen=row["plan_chosen_at"] is not None,
+        avatar=row["avatar"],
     )
+
+
+# The browser shrinks the picture to 128px before sending it, which comes to a
+# few kilobytes; this only stops something far bigger from being stored.
+MAX_AVATAR_CHARS = 200_000
+AVATAR_PREFIXES = ("data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,")
+
+
+class AvatarRequest(BaseModel):
+    image: str = Field(max_length=MAX_AVATAR_CHARS)
+
+
+@router.put("/avatar", status_code=204)
+async def set_avatar(body: AvatarRequest, user_id: UUID = Depends(current_user)):
+    """A new profile picture, as a data URL."""
+    if not body.image.startswith(AVATAR_PREFIXES):
+        raise HTTPException(status_code=422, detail="Pictures must be PNG, JPEG or WebP.")
+    await get_pool().execute("UPDATE users SET avatar = $2 WHERE id = $1", user_id, body.image)
+    return Response(status_code=204)
+
+
+@router.delete("/avatar", status_code=204)
+async def remove_avatar(user_id: UUID = Depends(current_user)):
+    """Back to the default picture."""
+    await get_pool().execute("UPDATE users SET avatar = NULL WHERE id = $1", user_id)
+    return Response(status_code=204)
 
 
 @router.post("/plan-chosen", status_code=204)

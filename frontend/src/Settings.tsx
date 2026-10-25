@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   deleteAccount,
@@ -6,12 +6,17 @@ import {
   getAccount,
   listKeys,
   openBillingPortal,
+  removeAvatar,
+  setAvatar,
   saveKey,
   type Account,
   type KeyStatus,
 } from './api'
 import { authEnabled, signOut, supabase } from './auth'
+import Avatar from './Avatar'
+import ModelOptions from './ModelOptions'
 import { billingReturn } from './nav'
+import { avatarFromFile, loadProfile, type Profile } from './profile'
 import { goToCheckout } from './upgrade'
 import styles from './Settings.module.css'
 import { logOut, useCanvasStore, type SettingsSection } from './store'
@@ -19,6 +24,7 @@ import { logOut, useCanvasStore, type SettingsSection } from './store'
 const SECTIONS: { id: SettingsSection; label: string }[] = [
   { id: 'general', label: 'General' },
   { id: 'account', label: 'Account' },
+  { id: 'privacy', label: 'Privacy' },
   { id: 'keys', label: 'API keys' },
   { id: 'billing', label: 'Billing' },
 ]
@@ -88,6 +94,7 @@ function Settings() {
           </h2>
           {section === 'general' && <General />}
           {section === 'account' && <Account />}
+          {section === 'privacy' && <Privacy />}
           {section === 'keys' && <Keys />}
           {section === 'billing' && <Billing />}
         </div>
@@ -117,11 +124,7 @@ function General() {
           onChange={(e) => setModel(e.target.value)}
           aria-label="Model"
         >
-          {usable.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
+          <ModelOptions models={models} />
         </select>
       )}
     </div>
@@ -155,6 +158,7 @@ function Account() {
 
   return (
     <>
+      <Picture />
       <div className={styles.row}>
         <div>
           <p className={styles.rowTitle}>Email</p>
@@ -191,6 +195,113 @@ function Account() {
           </button>
         )}
       </div>
+    </>
+  )
+}
+
+// The profile picture: Google's (or the initial) until one is uploaded here.
+function Picture() {
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [custom, setCustom] = useState(false) // a picture uploaded here, rather than the default
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
+
+  async function refresh() {
+    const account = await getAccount().catch(() => null)
+    setCustom(Boolean(account?.avatar))
+    setProfile(await loadProfile(account))
+  }
+
+  useEffect(() => {
+    void refresh()
+  }, [])
+
+  async function change(action: () => Promise<void>) {
+    setBusy(true)
+    setError(null)
+    try {
+      await action()
+      await refresh()
+    } catch (e) {
+      setError(messageOf(e))
+    }
+    setBusy(false)
+  }
+
+  return (
+    <div className={styles.row}>
+      <div className={styles.picture}>
+        <Avatar name={profile?.name ?? ''} picture={profile?.picture ?? null} size={44} />
+        <div>
+          <p className={styles.rowTitle}>Profile picture</p>
+          <p className={styles.rowHint}>{custom ? 'Uploaded here.' : 'From your Google account, or your initial.'}</p>
+          {error && <p className={styles.error}>{error}</p>}
+        </div>
+      </div>
+      <div className={styles.actions}>
+        {custom && (
+          <button type="button" className={styles.secondary} disabled={busy} onClick={() => void change(removeAvatar)}>
+            Remove
+          </button>
+        )}
+        <button type="button" className={styles.secondary} disabled={busy} onClick={() => fileInput.current?.click()}>
+          {busy ? 'Saving…' : 'Upload'}
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            e.target.value = '' // picking the same file again still counts as a change
+            if (file) void change(async () => setAvatar(await avatarFromFile(file)))
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+// A summary of the privacy policy (/privacy), which stays the full version.
+function Privacy() {
+  return (
+    <>
+      <p className={styles.intro}>
+        Divthink keeps only what it needs to run your canvases, and sends your conversations only to
+        the AI provider you pick. The{' '}
+        <a href="/privacy" target="_blank" rel="noreferrer">
+          Privacy Policy
+        </a>{' '}
+        has the details.
+      </p>
+      <details className={styles.disclosure} open>
+        <summary>How your data is protected</summary>
+        <ul>
+          <li>Your API keys are encrypted before they are saved, decrypted only to write a reply, and never sent back to your browser.</li>
+          <li>Everything travels encrypted, and the database accepts connections only from the Divthink server.</li>
+          <li>Other people who use Divthink can't see your canvases.</li>
+          <li>Divthink never sees your password or card details: Google or an emailed code signs you in, and Stripe handles payments.</li>
+        </ul>
+      </details>
+      <details className={styles.disclosure} open>
+        <summary>How your data is used</summary>
+        <ul>
+          <li>Your prompts, the thread above them and any attached files go to Anthropic or Google, whichever model you pick, under your own API key and their terms.</li>
+          <li>Your canvases, files and the details of each reply are stored so you can come back to them.</li>
+          <li>Page visits are counted anonymously by Cloudflare, without cookies and without linking them to your account.</li>
+          <li>Your data is never sold and never used for advertising.</li>
+        </ul>
+      </details>
+      <details className={styles.disclosure} open>
+        <summary>Deleting your data</summary>
+        <ul>
+          <li>Delete any canvas from the sidebar, or any card that nothing continues from.</li>
+          <li>Remove a saved key under API keys.</li>
+          <li>Delete your account under Account. Every canvas, file and key goes with it, straight away.</li>
+        </ul>
+      </details>
     </>
   )
 }
