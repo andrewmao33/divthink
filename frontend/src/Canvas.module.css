@@ -56,6 +56,15 @@
   pointer-events: none;
 }
 
+/* Light: white grain vanishes on paper, so the fine layer is a dark warm brown
+   instead, like flecks in eggshell. The orange specks stay as they are. */
+:root[data-theme='light'] .grain {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.85 0 0 0 0 0.52 0 0 0 0 0.22 6 0 0 0 -3.3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.24 0 0 0 0 0.18 0 0 0 0 0.11 2 0 0 0 -0.85'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.1;
+}
+
 /* Top right: puts every card back where the automatic layout would. Sized and
    placed to match the bar in the opposite corner (Sidebar.module.css). */
 .tidy {
@@ -127,6 +136,11 @@
   background: var(--demo-ground);
   --demo-ground: #38352b;
   --xy-background-color: var(--demo-ground);
+}
+
+/* Light: a step darker than the page instead, for the same separation. */
+:root[data-theme='light'] .canvas[data-embedded] {
+  --demo-ground: #e9e2d5;
 }
 
 /* Shown at the top while live updates are reconnecting. */

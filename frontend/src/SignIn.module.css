@@ -75,8 +75,8 @@
 /* The mark sits at the left edge; the words stay centred in the button. */
 .google {
   position: relative;
-  border: 1px solid #ffffff1f;
-  background: #ffffff0a;
+  border: 1px solid var(--fill-hover);
+  background: var(--fill-faint);
   font-weight: 500;
   color: var(--text);
 }
@@ -87,8 +87,8 @@
 }
 
 .google:hover:not(:disabled) {
-  border-color: #ffffff38;
-  background: #ffffff14;
+  border-color: var(--rule-strong);
+  background: var(--fill);
 }
 
 /* The one filled button on the page: what the form is for. */
@@ -101,7 +101,7 @@
 }
 
 .primary:hover:not(:disabled) {
-  background: #ffffff;
+  background: var(--text-bright);
 }
 
 .google:disabled,
@@ -136,8 +136,8 @@
 
 .input {
   padding: 0 14px;
-  border: 1px solid #ffffff1f;
-  background: #00000033;
+  border: 1px solid var(--fill-hover);
+  background: var(--well);
   color: var(--text);
   text-align: left;
   transition: border-color 0.15s;
@@ -149,7 +149,7 @@
 
 .input:focus {
   outline: none;
-  border-color: #ffffff59;
+  border-color: var(--rule-focus);
 }
 
 /* The code reads as digits to compare against the email, so space them out. */

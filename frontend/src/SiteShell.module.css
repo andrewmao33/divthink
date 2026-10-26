@@ -1,6 +1,7 @@
-/* The frame every public page shares: dark ground, the menu top-left, the
-   sign-in link top-right, the footer at the bottom. Dark, unlike the canvas: these colours are the site's
-   own and deliberately don't touch the shared tokens in index.css. */
+/* The frame every public page shares: the ground, the menu top-left, the
+   sign-in link top-right, the footer at the bottom. These colours are the
+   site's own and deliberately don't touch the shared tokens in index.css.
+   Dark by default, light under data-theme (theme.ts, the footer's switch). */
 
 .page {
   --bg: #1d1b18; /* warm near-black: brown-tinted rather than blue */
@@ -10,6 +11,13 @@
   --error: #f08a8a;
   --accent: #d98538; /* burnt orange: the one colour on the page */
   --rule: #ffffff14; /* hairlines: white at low alpha, so they tint the ground */
+  --rule-strong: #ffffff2e; /* outlined buttons and inputs */
+  --rule-focus: #ffffff59;
+  --fill-faint: #ffffff08; /* plan cards, the Google button */
+  --fill: #ffffff12; /* buttons */
+  --fill-hover: #ffffff1f;
+  --well: #00000033; /* inside a text box */
+  --text-bright: #ffffff; /* the filled button, hovered */
 
   position: relative;
   min-height: 100%;
@@ -17,6 +25,25 @@
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
+}
+
+/* Light: the same paper as the app's light theme, and a deeper orange so it
+   still reads on it. */
+:root[data-theme='light'] .page {
+  --bg: #f4efe6;
+  --text: #1d1b18;
+  --text-muted: #7a776f;
+  --text-soft: #4f4c46;
+  --error: #c43c3c;
+  --accent: #b8621c;
+  --rule: #0000001a;
+  --rule-strong: #00000033;
+  --rule-focus: #00000059;
+  --fill-faint: #00000008;
+  --fill: #0000000d;
+  --fill-hover: #00000017;
+  --well: #ffffffb3;
+  --text-bright: #000000;
 }
 
 /* Selected text, anywhere on these pages: white on a saturated electric blue. */
@@ -45,6 +72,15 @@
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 2 0 0 0 -0.85'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   opacity: 0.06;
   pointer-events: none;
+}
+
+/* Light: white grain vanishes on paper, so the fine layer is a dark warm brown
+   instead, like flecks in eggshell. The orange specks stay as they are. */
+:root[data-theme='light'] .backdrop::before {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.85 0 0 0 0 0.52 0 0 0 0 0.22 6 0 0 0 -3.3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.24 0 0 0 0 0.18 0 0 0 0 0.11 2 0 0 0 -0.85'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.1;
 }
 
 .backdrop {
@@ -196,13 +232,48 @@
   color: var(--text);
 }
 
-.copyright {
-  margin: 0;
+.bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
   padding: 40px 0 64px;
   border-top: 1px solid var(--rule);
+}
+
+.copyright {
+  margin: 0;
   font-size: 0.71875rem;
   letter-spacing: 0.02em;
   color: var(--text-muted);
+}
+
+/* Light or dark: one icon, of the theme it switches to. */
+.theme {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    background 0.15s;
+}
+
+.theme:hover {
+  background: var(--fill);
+  color: var(--text);
+}
+
+.theme:focus-visible {
+  outline: 1px solid var(--text);
+  outline-offset: 2px;
 }
 
 /* The drawing has its own margin inside the file, so the head itself comes out

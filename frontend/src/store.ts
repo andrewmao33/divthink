@@ -662,9 +662,12 @@ export function resetCanvas() {
 }
 
 function apply(event: StreamEvent) {
-  useCanvasStore.setState((s) =>
-    event.type === 'nodes_deleted' ? withoutNodes(s, event.data.node_ids) : applyEvent(s, event),
-  )
+  useCanvasStore.setState((s) => {
+    if (event.type === 'nodes_deleted') return withoutNodes(s, event.data.node_ids)
+    // The sidebar refetches its list when this title changes.
+    if (event.type === 'canvas_titled') return { session: s.session && { ...s.session, title: event.data.title } }
+    return applyEvent(s, event)
+  })
 }
 
 // Opens the canvas's live stream, then loads the canvas, then applies events that

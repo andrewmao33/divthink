@@ -34,6 +34,13 @@
 
   /* An alpha, so one value reads correctly on both the ground and the panels. */
   --hover-tint: #ffffff0f;
+  /* A card on the way to the active one: brighter than a border, short of active. */
+  --color-path: #ffffff59;
+  /* An edge on the way to the active card. */
+  --edge-lit: #ffffff8c;
+  --scrollbar: #ffffff2e;
+  /* Dims the app behind a dialog. */
+  --scrim: #00000066;
 
   /* Type */
   --font-sans: 'Inter Tight', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -58,6 +65,39 @@
      buttons and chips inside them. */
   --radius: 12px;
   --radius-sm: 7px;
+
+  color-scheme: dark;
+}
+
+/* The light palette. Warm paper rather than pure white, so it belongs with
+   the dark one. The same rules hold: cards one step off the frame, hairlines
+   as low-alpha tints, now of black. theme.ts sets data-theme. The public pages
+   have their own colours (SiteShell.module.css), switched the same way. */
+:root[data-theme='light'] {
+  --color-bg: #f4efe6;
+  --color-surface: #ece6da;
+  --color-card: #faf7f1;
+  --color-card-active: #fdfbf7;
+  --color-text: #1d1b18;
+  --color-text-soft: #4f4c46;
+  --color-text-muted: #7a776f;
+
+  --color-border: #0000001a;
+  --color-border-strong: #00000033;
+  --color-edge: #00000040;
+
+  --color-accent: #1d1b18;
+  --color-accent-hover: #000000;
+  --color-error: #c43c3c;
+  --color-on-accent: #f4efe6;
+
+  --hover-tint: #0000000d;
+  --color-path: #00000059;
+  --edge-lit: #0000008c;
+  --scrollbar: #00000033;
+  --scrim: #00000040;
+
+  color-scheme: light;
 }
 
 *,
@@ -85,10 +125,15 @@ body {
    show up as a white strip on the dark ground. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #ffffff2e transparent;
+  scrollbar-color: var(--scrollbar) transparent;
 }
 
 /* Selected text: white on a saturated electric blue, as on the public pages. */
+/* The logo is drawn in white: turned black on a light ground. */
+:root[data-theme='light'] img[src='/logo.svg'] {
+  filter: invert(1);
+}
+
 ::selection {
   background: #3a00ff;
   color: #fff;

@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import { onLinkClick } from './nav'
+import { saveTheme, useShownTheme } from './theme'
 import { useGetStarted } from './useGetStarted'
 import styles from './SiteShell.module.css'
 
@@ -20,10 +21,11 @@ const PAGES: { page: Page; href: string; label: string }[] = [
 // their own: signing in, picking a plan.
 function SiteShell({ current, bare, children }: { current?: Page; bare?: boolean; children?: ReactNode }) {
   const { logIn } = useGetStarted()
+  const theme = useShownTheme()
 
-  // The window behind the page is light for the canvas and dark for these pages
-  // (index.html, "site-dark"). index.html guesses which before anything loads;
-  // this makes it certain while one of these pages is on screen.
+  // These pages scroll, unlike the canvas (index.html, "site-dark"). index.html
+  // guesses which before anything loads; this makes it certain while one of
+  // these pages is on screen.
   useEffect(() => {
     document.documentElement.classList.add('site-dark')
     return () => document.documentElement.classList.remove('site-dark')
@@ -115,7 +117,19 @@ function SiteShell({ current, bare, children }: { current?: Page; bare?: boolean
                   </li>
                 </ul>
               </div>
-              <p className={styles.copyright}>© Divthink {new Date().getFullYear()}</p>
+              <div className={styles.bottom}>
+                <p className={styles.copyright}>© Divthink {new Date().getFullYear()}</p>
+                {/* Shows what it switches to. */}
+                <button
+                  type="button"
+                  className={styles.theme}
+                  aria-label={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
+                  title={theme === 'dark' ? 'Light' : 'Dark'}
+                  onClick={() => saveTheme(theme === 'dark' ? 'light' : 'dark')}
+                >
+                  {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+                </button>
+              </div>
             </footer>
           </div>
 
@@ -123,6 +137,23 @@ function SiteShell({ current, bare, children }: { current?: Page; bare?: boolean
         </div>
       </div>
     </div>
+  )
+}
+
+function SunIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
+      <circle cx="8" cy="8" r="3" />
+      <path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.06 1.06M11.54 11.54l1.06 1.06M3.4 12.6l1.06-1.06M11.54 4.46l1.06-1.06" />
+    </svg>
+  )
+}
+
+function MoonIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" aria-hidden="true">
+      <path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z" />
+    </svg>
   )
 }
 

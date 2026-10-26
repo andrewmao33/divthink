@@ -32,7 +32,7 @@
 
 /* On the way to the active card: a brighter border, short of the active one's. */
 .path {
-  border-color: #ffffff59;
+  border-color: var(--color-path);
 }
 
 /* The inset shadow thickens the border without changing the card's size, which

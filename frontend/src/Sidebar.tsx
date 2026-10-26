@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { getAccount, listSessions, renameSession, type Account, type Session } from './api'
 import { authEnabled } from './auth'
@@ -8,6 +8,21 @@ import { loadProfile, type Profile } from './profile'
 import styles from './Sidebar.module.css'
 import { openPlans } from './upgrade'
 import { logOut, useCanvasStore } from './store'
+
+const DRAWER_STORAGE_KEY = 'divthink.sidebar-width'
+// Narrower than this and the header and canvas names don't fit; wider than
+// this (or 86% of the window) and it's most of the screen.
+const DRAWER_MIN = 240
+const DRAWER_MAX = 560
+
+function loadDrawerWidth(): number | null {
+  try {
+    const saved = Number(window.localStorage.getItem(DRAWER_STORAGE_KEY))
+    return saved >= DRAWER_MIN && saved <= DRAWER_MAX ? saved : null
+  } catch {
+    return null
+  }
+}
 
 // The bar in the top-left corner, naming the open canvas, and the drawer it
 // opens: your other canvases and the account actions. Closed until asked for,
@@ -25,6 +40,35 @@ function Sidebar({ children }: { children: React.ReactNode }) {
     })),
   )
   const [open, setOpen] = useState(false)
+  // Opened by pointing at the menu button rather than clicking it: closes again
+  // when the pointer leaves the drawer. A click inside keeps it open.
+  const [peek, setPeek] = useState(false)
+  // Dragged wider or narrower by its right edge, and remembered in this browser.
+  // null until then: the stylesheet's width.
+  const [width, setWidth] = useState<number | null>(loadDrawerWidth)
+
+  function startResize(e: ReactPointerEvent<HTMLDivElement>) {
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = e.currentTarget.parentElement!.getBoundingClientRect().width
+    let latest = startWidth
+    const onMove = (move: globalThis.PointerEvent) => {
+      const max = Math.min(DRAWER_MAX, window.innerWidth * 0.86)
+      latest = Math.round(Math.min(max, Math.max(DRAWER_MIN, startWidth + move.clientX - startX)))
+      setWidth(latest)
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      try {
+        window.localStorage.setItem(DRAWER_STORAGE_KEY, String(latest))
+      } catch {
+        // Kept for this visit only.
+      }
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
   // The canvas's name being edited in place; null while it is just being shown.
   const [draft, setDraft] = useState<string | null>(null)
   // The menu behind a row's dots, and the row being renamed in place.
@@ -164,7 +208,15 @@ function Sidebar({ children }: { children: React.ReactNode }) {
         <button
           type="button"
           className={styles.menuButton}
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setPeek(false)
+            setOpen(true)
+          }}
+          onMouseEnter={() => {
+            if (open) return
+            setPeek(true)
+            setOpen(true)
+          }}
           aria-label="Canvases and settings"
           title="Canvases and settings"
         >
@@ -215,7 +267,15 @@ function Sidebar({ children }: { children: React.ReactNode }) {
       {open && (
         <>
           <div className={styles.scrim} onClick={() => setOpen(false)} />
-          <aside className={styles.drawer}>
+          <aside
+            className={styles.drawer}
+            style={width === null ? undefined : { width }}
+            onMouseLeave={() => {
+              // Not while something in it is in use: a menu, a rename.
+              if (peek && !menu && !renaming && !accountOpen) setOpen(false)
+            }}
+            onPointerDown={() => setPeek(false)}
+          >
             {/* The same button and name as the bar, in the same place, so the
                 pointer that opened the drawer rests on the button that closes
                 it and not on anything that does something. */}
@@ -223,7 +283,10 @@ function Sidebar({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 className={styles.menuButton}
-                onClick={() => setOpen(false)}
+                // Pointing opened it, and the pointer is now on this button: a
+                // click straight after is meant to open, so it doesn't close.
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => (peek ? setPeek(false) : setOpen(false))}
                 aria-label="Close"
                 title="Close"
               >
@@ -336,7 +399,7 @@ function Sidebar({ children }: { children: React.ReactNode }) {
                 aria-expanded={accountOpen}
                 onClick={() => setAccountOpen((v) => !v)}
               >
-                <Avatar name={profile?.name ?? ''} picture={profile?.picture ?? null} size={26} />
+                <Avatar name={profile?.name ?? ''} picture={profile?.picture ?? null} size={20} />
                 <span className={styles.accountName}>{profile?.name ?? ''}</span>
                 {account && <span className={styles.accountPlan}>· {account.plan_label}</span>}
                 <svg className={styles.chevron} width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
@@ -344,6 +407,13 @@ function Sidebar({ children }: { children: React.ReactNode }) {
                 </svg>
               </button>
             </div>
+            <div
+              className={styles.resize}
+              onPointerDown={startResize}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize the sidebar"
+            />
           </aside>
           {menu && (
             <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />

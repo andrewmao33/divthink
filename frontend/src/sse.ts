@@ -26,6 +26,8 @@ export type StreamEvent =
       }
     }
   | { type: 'titled'; data: { node_id: string; title: string } }
+  // The canvas itself, named after its first reply.
+  | { type: 'canvas_titled'; data: { title: string } }
   | { type: 'error'; data: { node_id: string; message: string } }
 
 const EVENT_TYPES = new Set([
@@ -36,6 +38,7 @@ const EVENT_TYPES = new Set([
   'token',
   'done',
   'titled',
+  'canvas_titled',
   'error',
 ])
 

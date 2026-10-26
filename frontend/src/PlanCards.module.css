@@ -13,7 +13,7 @@
   flex-direction: column;
   padding: var(--space-6) var(--space-4);
   border-radius: var(--radius);
-  background: #ffffff08;
+  background: var(--fill-faint);
 }
 
 .planName {
@@ -40,7 +40,7 @@
   padding: 11px var(--space-4);
   border: 0;
   border-radius: 999px;
-  background: #ffffff12;
+  background: var(--fill);
   font: inherit;
   font-size: var(--text-sm);
   font-weight: 500;
@@ -50,7 +50,7 @@
 }
 
 .planButton:hover:not(:disabled) {
-  background: #ffffff1f;
+  background: var(--fill-hover);
 }
 
 /* The plan being suggested: the one bright button on the page. */
@@ -60,7 +60,7 @@
 }
 
 .planButtonBright:hover:not(:disabled) {
-  background: #ffffff;
+  background: var(--text-bright);
 }
 
 .planButton:disabled {

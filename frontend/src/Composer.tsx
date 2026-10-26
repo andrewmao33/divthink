@@ -127,6 +127,7 @@ function Composer({ active, merging }: Props) {
     setDragging(false)
     const files = Array.from(e.dataTransfer.files)
     if (files.length > 0) void addImages(files)
+    inputRef.current?.focus() // so the prompt can be typed straight after
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -253,12 +254,20 @@ function Composer({ active, merging }: Props) {
           onChange={(e) => {
             void addImages(Array.from(e.target.files ?? []))
             e.target.value = '' // lets the same file be picked again
+            // Back to the text box, not the attach button, so the prompt can be
+            // typed straight after picking.
+            inputRef.current?.focus()
           }}
         />
         <button
           type="button"
           className={styles.attach}
-          onClick={() => fileRef.current?.click()}
+          onClick={() => {
+            // Focus goes back to whatever had it when the picker closes, chosen
+            // or cancelled: the text box, not this button.
+            inputRef.current?.focus()
+            fileRef.current?.click()
+          }}
           title="Attach images or PDFs"
           aria-label="Attach images or PDFs"
         >

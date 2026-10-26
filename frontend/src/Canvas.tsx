@@ -285,7 +285,7 @@ function Canvas({ demoId, embedded = false }: Props) {
               source: parent,
               target: exchange.id,
               style: {
-                ...(lit && { stroke: 'var(--edge-lit, #ffffff8c)', strokeWidth: 1.5 }),
+                ...(lit && { stroke: 'var(--edge-lit)', strokeWidth: 1.5 }),
                 ...(branch && { strokeDasharray: '5 5' }),
               },
               lit,

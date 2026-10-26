@@ -17,6 +17,7 @@ import Avatar from './Avatar'
 import ModelOptions from './ModelOptions'
 import { billingReturn } from './nav'
 import { avatarFromFile, loadProfile, type Profile } from './profile'
+import { loadTheme, saveTheme, type Theme } from './theme'
 import { goToCheckout } from './upgrade'
 import styles from './Settings.module.css'
 import { logOut, useCanvasStore, type SettingsSection } from './store'
@@ -108,26 +109,49 @@ function General() {
     useShallow((s) => ({ models: s.models, model: s.model, setModel: s.setModel })),
   )
   const usable = models.filter((m) => m.available)
+  const [theme, setTheme] = useState<Theme>(loadTheme)
 
   return (
-    <div className={styles.row}>
-      <div>
-        <p className={styles.rowTitle}>Model</p>
-        <p className={styles.rowHint}>Used for new prompts. You can change it for any reply.</p>
-      </div>
-      {usable.length === 0 ? (
-        <span className={styles.muted}>Add an API key first</span>
-      ) : (
+    <>
+      <div className={styles.row}>
+        <div>
+          <p className={styles.rowTitle}>Appearance</p>
+          <p className={styles.rowHint}>System follows your computer's light or dark setting.</p>
+        </div>
         <select
           className={styles.select}
-          value={model ?? ''}
-          onChange={(e) => setModel(e.target.value)}
-          aria-label="Model"
+          value={theme}
+          onChange={(e) => {
+            const next = e.target.value as Theme
+            setTheme(next)
+            saveTheme(next)
+          }}
+          aria-label="Appearance"
         >
-          <ModelOptions models={models} />
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
         </select>
-      )}
-    </div>
+      </div>
+      <div className={styles.row}>
+        <div>
+          <p className={styles.rowTitle}>Model</p>
+          <p className={styles.rowHint}>Used for new prompts. You can change it for any reply.</p>
+        </div>
+        {usable.length === 0 ? (
+          <span className={styles.muted}>Add an API key first</span>
+        ) : (
+          <select
+            className={styles.select}
+            value={model ?? ''}
+            onChange={(e) => setModel(e.target.value)}
+            aria-label="Model"
+          >
+            <ModelOptions models={models} />
+          </select>
+        )}
+      </div>
+    </>
   )
 }
 

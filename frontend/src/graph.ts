@@ -108,6 +108,9 @@ export function applyEvent(current: Graph, event: StreamEvent, now = Date.now())
     case 'nodes_deleted':
       return removeNodes(current, event.data.node_ids)
 
+    case 'canvas_titled':
+      return current // about the canvas, not its cards: the store applies it
+
     case 'thinking':
       return updateReply(current, event.data.node_id, ({ node, live }) => ({
         node: { ...node, status: 'streaming' },

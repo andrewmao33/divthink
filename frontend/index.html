@@ -14,15 +14,20 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&display=swap" rel="stylesheet" />
     <!-- The window's own background, set before anything else loads so the
-         page never opens with a flash of white. Every page is dark. The script
-         below marks the public pages (the policy, or the home page when nobody
-         is signed in: Supabase keeps the sign-in under an "sb-…-auth-token"
-         key), which scroll; SiteShell.tsx keeps the class in step once the app
-         is running. -->
+         page never opens with a flash of the wrong colour. The script below
+         marks the public pages (the policy, or the home page when nobody is
+         signed in: Supabase keeps the sign-in under an "sb-…-auth-token" key),
+         which scroll and are always dark; SiteShell.tsx keeps the class in step
+         once the app is running. It also applies the light or dark setting
+         (theme.ts). -->
     <style>
       html,
       body {
         background: #1d1b18;
+      }
+      html[data-theme='light'],
+      html[data-theme='light'] body {
+        background: #f4efe6;
       }
       /* Keep the scrollbar's strip of width set aside even on a page too short
          to scroll. Otherwise a long page is narrower than a short one by the
@@ -42,6 +47,11 @@
         if (sitePages.indexOf(path) !== -1 || (!signedIn && !isDemo)) {
           document.documentElement.classList.add('site-dark')
         }
+        var theme = localStorage.getItem('divthink.theme')
+        var light =
+          theme === 'light' ||
+          (theme !== 'dark' && !matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.dataset.theme = light ? 'light' : 'dark'
       } catch (e) {}
     </script>
     <title>Divthink</title>
