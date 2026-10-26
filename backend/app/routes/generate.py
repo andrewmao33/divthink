@@ -22,13 +22,13 @@ from ..layout import (
     prompt_position,
 )
 from ..plans import check_new_card
+from ..titles import title_from_prompt
 from ..providers.catalog import CONTEXT_TOKENS, DEFAULT_MODEL, LABELS, MODELS, PROVIDER_LABELS
 from .nodes import CardLayout
 
 router = APIRouter(prefix="/sessions", tags=["generate"])
 log = logging.getLogger(__name__)
 
-TITLE_MAX = 60
 MAX_TEXT_CHARS = 50_000  # prompts and quotes
 MAX_ATTACHMENTS = 8
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
@@ -241,7 +241,7 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
                 WHERE id = $1
                 RETURNING title
                 """,
-                session_id, _title_from(body.prompt),
+                session_id, title_from_prompt(body.prompt),
             )
 
     # Only after the transaction has committed, so listeners and the job can see
@@ -323,8 +323,3 @@ def _decoded(attachments: list[Attachment]) -> list[tuple[str, bytes, str]]:
     return decoded
 
 
-def _title_from(prompt: str) -> str:
-    one_line = " ".join(prompt.split())
-    if len(one_line) <= TITLE_MAX:
-        return one_line
-    return one_line[: TITLE_MAX - 1].rstrip() + "…"

@@ -12,7 +12,7 @@ from .providers import claude, gemini
 from .providers.base import Chunk, Message, ProviderError
 from .providers.catalog import MODELS
 from .thinking import thought_headings
-from .titles import title_for
+from .titles import canvas_title_for, title_for, title_from_prompt
 from .usage import record as record_usage
 
 log = logging.getLogger(__name__)
@@ -191,16 +191,56 @@ async def _write_title(
     title, usage = await title_for(reply, model, api_key)
     if usage is not None:
         await record_usage(session_id, node_id, model, "title", usage)
-    if not title:
-        return
+    if title:
+        try:
+            await get_pool().execute(
+                "UPDATE nodes SET metadata = metadata || $2::jsonb WHERE id = $1",
+                node_id, {"title": title},
+            )
+            events.publish(session_id, "titled", {"node_id": str(node_id), "title": title})
+        except Exception:
+            log.exception("could not save the title for %s", node_id)
+    await _title_canvas(session_id, node_id, reply, model, api_key)
+
+
+async def _title_canvas(
+    session_id: UUID, node_id: UUID, reply: str, model: str, api_key: str
+) -> None:
+    """Names the canvas after its first exchange, as a chat app names a
+    conversation: a separate name from the card's, short enough to fit the bar.
+
+    Until now the canvas was called by its first prompt, cut short (generate.py
+    sets that). Only a canvas still called exactly that is renamed: one the user
+    renamed keeps their name, and later replies, whose prompts aren't the
+    canvas's name, cost no extra call. Never raises, like _write_title.
+    """
     try:
-        await get_pool().execute(
-            "UPDATE nodes SET metadata = metadata || $2::jsonb WHERE id = $1",
-            node_id, {"title": title},
+        pool = get_pool()
+        row = await pool.fetchrow(
+            """
+            SELECT p.content, s.title FROM edges e
+            JOIN nodes p ON p.id = e.parent_id
+            JOIN sessions s ON s.id = p.session_id
+            WHERE e.child_id = $1 AND p.type = 'user'
+            """,
+            node_id,
         )
-        events.publish(session_id, "titled", {"node_id": str(node_id), "title": title})
+        if row is None or row["title"] != title_from_prompt(row["content"]):
+            return
+        prompt = row["content"]
+        title, usage = await canvas_title_for(prompt, reply, model, api_key)
+        if usage is not None:
+            await record_usage(session_id, node_id, model, "title", usage)
+        if not title:
+            return
+        renamed = await pool.fetchval(
+            "UPDATE sessions SET title = $2 WHERE id = $1 AND title = $3 RETURNING id",
+            session_id, title, title_from_prompt(prompt),
+        )
+        if renamed:
+            events.publish(session_id, "canvas_titled", {"title": title})
     except Exception:
-        log.exception("could not save the title for %s", node_id)
+        log.exception("could not name canvas %s", session_id)
 
 
 async def _mark_error(session_id: UUID, node_id: UUID, reason: str) -> None:
