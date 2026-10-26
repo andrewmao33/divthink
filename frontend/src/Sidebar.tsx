@@ -10,6 +10,15 @@ import { openPlans } from './upgrade'
 import { logOut, useCanvasStore } from './store'
 
 const DRAWER_STORAGE_KEY = 'divthink.sidebar-width'
+const PINNED_STORAGE_KEY = 'divthink.sidebar-pinned'
+
+function loadPinned(): boolean {
+  try {
+    return window.localStorage.getItem(PINNED_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 // Narrower than this and the header and canvas names don't fit; wider than
 // this (or 86% of the window) and it's most of the screen.
 const DRAWER_MIN = 240
@@ -43,6 +52,36 @@ function Sidebar({ children }: { children: React.ReactNode }) {
   // Opened by pointing at the menu button rather than clicking it: closes again
   // when the pointer leaves the drawer. A click inside keeps it open.
   const [peek, setPeek] = useState(false)
+  // Kept open beside the canvas, which moves over to make room, rather than
+  // laid over it. Clicking the menu button does this; remembered in this browser.
+  const [pinned, setPinnedState] = useState(loadPinned)
+  const shown = open || pinned
+
+  // Put away from its own menu button, the bar's button appears under the
+  // pointer: that isn't pointing at it to peek, so it waits until the pointer
+  // has been somewhere else.
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const noPeek = useRef(false)
+
+  function setPinned(next: boolean) {
+    if (!next) {
+      noPeek.current = true
+      const onMove = (e: globalThis.PointerEvent) => {
+        if (menuButtonRef.current?.contains(e.target as globalThis.Node)) return
+        noPeek.current = false
+        window.removeEventListener('pointermove', onMove)
+      }
+      window.addEventListener('pointermove', onMove)
+    }
+    setPinnedState(next)
+    setOpen(false)
+    setPeek(false)
+    try {
+      window.localStorage.setItem(PINNED_STORAGE_KEY, next ? '1' : '0')
+    } catch {
+      // Kept for this visit only.
+    }
+  }
   // Dragged wider or narrower by its right edge, and remembered in this browser.
   // null until then: the stylesheet's width.
   const [width, setWidth] = useState<number | null>(loadDrawerWidth)
@@ -132,7 +171,7 @@ function Sidebar({ children }: { children: React.ReactNode }) {
   const accountRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!open) return
+    if (!shown) return
     let cancelled = false
     getAccount()
       .catch(() => null) // leave the plan out rather than show a wrong one
@@ -158,8 +197,8 @@ function Sidebar({ children }: { children: React.ReactNode }) {
   }, [accountOpen])
 
   useEffect(() => {
-    if (!open) setAccountOpen(false)
-  }, [open])
+    if (!shown) setAccountOpen(false)
+  }, [shown])
 
   // A choice in the account menu closes the menu and the drawer, then acts.
   function pick(action: () => void) {
@@ -189,7 +228,7 @@ function Sidebar({ children }: { children: React.ReactNode }) {
   }, [session?.id, session?.title])
 
   useEffect(() => {
-    if (!open) return
+    if (!open || pinned) return
     const onKeyDown = (e: KeyboardEvent) => {
       // One thing at a time: a menu or a rename in the drawer closes first.
       if (e.key !== 'Escape' || menu || renaming) return
@@ -198,81 +237,88 @@ function Sidebar({ children }: { children: React.ReactNode }) {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open, menu, renaming, accountOpen])
+  }, [open, pinned, menu, renaming, accountOpen])
 
   return (
     <div className={styles.shell}>
-      {children}
+      <div className={styles.main}>
+        {children}
 
-      <div className={styles.bar}>
-        <button
-          type="button"
-          className={styles.menuButton}
-          onClick={() => {
-            setPeek(false)
-            setOpen(true)
-          }}
-          onMouseEnter={() => {
-            if (open) return
-            setPeek(true)
-            setOpen(true)
-          }}
-          aria-label="Canvases and settings"
-          title="Canvases and settings"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M2 4h12M2 8h12M2 12h12" />
-          </svg>
-        </button>
-        <img className={styles.mark} src="/logo.svg" alt="" />
-        <span className={styles.brand}>Divthink</span>
-        {session && (
-          <>
-            <span className={styles.slash}>/</span>
-            {unsaved ? (
-              // Nothing to rename until the first prompt saves it.
-              <span className={styles.canvasName}>New canvas</span>
-            ) : draft === null ? (
+        <div className={`${styles.bar} ${pinned ? styles.barNameOnly : ''}`}>
+          {/* While the sidebar is pinned it has the button and the name itself,
+              so the bar is just the canvas's name. */}
+          {!pinned && (
+            <>
               <button
                 type="button"
-                className={styles.canvasName}
-                onClick={() => setDraft(session.title)}
-                title="Rename this canvas"
+                ref={menuButtonRef}
+                className={styles.menuButton}
+                onClick={() => setPinned(true)}
+                onMouseEnter={() => {
+                  if (open || noPeek.current) return
+                  setPeek(true)
+                  setOpen(true)
+                }}
+                aria-label="Show sidebar"
+                title="Show sidebar"
               >
-                {session.title || 'Untitled canvas'}
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M2 4h12M2 8h12M2 12h12" />
+                </svg>
               </button>
-            ) : (
-              <input
-                className={styles.canvasInput}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onBlur={() => {
-                  renameCanvas(draft)
-                  setDraft(null)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') e.currentTarget.blur()
-                  if (e.key === 'Escape') setDraft(null)
-                }}
-                maxLength={200}
-                aria-label="Canvas name"
-                autoFocus
-                onFocus={(e) => e.currentTarget.select()}
-              />
-            )}
-          </>
-        )}
+              <img className={styles.mark} src="/logo.svg" alt="" />
+              <span className={styles.brand}>Divthink</span>
+            </>
+          )}
+          {session && (
+            <>
+              {!pinned && <span className={styles.slash}>/</span>}
+              {unsaved ? (
+                // Nothing to rename until the first prompt saves it.
+                <span className={styles.canvasName}>New canvas</span>
+              ) : draft === null ? (
+                <button
+                  type="button"
+                  className={styles.canvasName}
+                  onClick={() => setDraft(session.title)}
+                  title="Rename this canvas"
+                >
+                  {session.title || 'Untitled canvas'}
+                </button>
+              ) : (
+                <input
+                  className={styles.canvasInput}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onBlur={() => {
+                    renameCanvas(draft)
+                    setDraft(null)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur()
+                    if (e.key === 'Escape') setDraft(null)
+                  }}
+                  maxLength={200}
+                  aria-label="Canvas name"
+                  autoFocus
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+              )}
+            </>
+          )}
+        </div>
+
       </div>
 
-      {open && (
+      {shown && (
         <>
-          <div className={styles.scrim} onClick={() => setOpen(false)} />
+          {!pinned && <div className={styles.scrim} onClick={() => setOpen(false)} />}
           <aside
-            className={styles.drawer}
+            className={`${styles.drawer} ${pinned ? styles.drawerPinned : ''}`}
             style={width === null ? undefined : { width }}
             onMouseLeave={() => {
               // Not while something in it is in use: a menu, a rename.
-              if (peek && !menu && !renaming && !accountOpen) setOpen(false)
+              if (!pinned && peek && !menu && !renaming && !accountOpen) setOpen(false)
             }}
             onPointerDown={() => setPeek(false)}
           >
@@ -283,12 +329,11 @@ function Sidebar({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 className={styles.menuButton}
-                // Pointing opened it, and the pointer is now on this button: a
-                // click straight after is meant to open, so it doesn't close.
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => (peek ? setPeek(false) : setOpen(false))}
-                aria-label="Close"
-                title="Close"
+                // Laid over the canvas (pointed at), a click keeps it open
+                // beside the canvas; pinned, a click puts it away.
+                onClick={() => setPinned(!pinned)}
+                aria-label={pinned ? 'Hide sidebar' : 'Keep sidebar open'}
+                title={pinned ? 'Hide sidebar' : 'Keep sidebar open'}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M2 4h12M2 8h12M2 12h12" />

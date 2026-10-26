@@ -1,5 +1,6 @@
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from '@xyflow/react'
 import styles from './Card.module.css'
+import { AttachmentThumbs } from './Attachments'
 import { attachmentsOf, type Exchange } from './exchanges'
 import { CARD_MIN_HEIGHT, CARD_MIN_WIDTH } from './layout'
 import { ReplyBody } from './Reply'
@@ -25,7 +26,8 @@ function Card({ id, data }: NodeProps<CardNode>) {
   const { exchange, state, picked, sized, thread } = data
   const { prompt, reply, live, quote } = exchange
   const placeCard = useCanvasStore((s) => s.placeCard)
-  const files = attachmentsOf(prompt).length
+  const files = attachmentsOf(prompt)
+  const sessionId = useCanvasStore((s) => s.session?.id)
   const finished = reply?.status === 'complete'
   const className = [styles.card, styles[state], picked && styles.picked, sized && styles.sized]
     .filter(Boolean)
@@ -56,7 +58,7 @@ function Card({ id, data }: NodeProps<CardNode>) {
               {prompt.content}
             </p>
           )}
-          {files > 0 && <p className={styles.files}>{files === 1 ? '1 file' : `${files} files`}</p>}
+          {files.length > 0 && sessionId && <AttachmentThumbs sessionId={sessionId} files={files} />}
         </div>
         {reply && (
           // Selectable, so a passage can be highlighted and branched from. nodrag

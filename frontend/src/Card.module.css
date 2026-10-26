@@ -38,16 +38,16 @@
 /* The inset shadow thickens the border without changing the card's size, which
    would otherwise nudge the layout every time a different card is picked. */
 .active {
-  border-color: var(--color-accent);
+  border-color: var(--color-card-outline);
   background: var(--color-card-active);
-  box-shadow: inset 0 0 0 1px var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-card-outline);
 }
 
 /* Picked for the merge being drafted. */
 .picked,
 .picked.rest {
   border-style: dashed;
-  border-color: var(--color-accent);
+  border-color: var(--color-card-outline);
   opacity: 1;
 }
 
@@ -104,13 +104,6 @@
   color: var(--color-text-muted);
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-}
-
-.files {
-  margin: var(--space-1) 0 0;
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  color: var(--color-text-muted);
 }
 
 /* Marks a card nothing continues from yet: a place to keep going. */

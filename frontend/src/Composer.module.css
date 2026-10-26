@@ -276,6 +276,8 @@
   height: 100%;
   border: 1px solid var(--color-border);
   object-fit: cover;
+  object-position: top; /* a PDF page: its top, where the title is */
+  background: #fff;
 }
 
 .thumbRemove {
@@ -295,7 +297,28 @@
   cursor: pointer;
 }
 
-/* A PDF has no thumbnail, so it shows its name. */
+/* A PDF's first page: larger, and the shape of a page (US letter). */
+.thumbPage {
+  width: 84px;
+  height: 108px;
+}
+
+/* On a PDF's first page, so it isn't mistaken for a picture. */
+.pdfBadge {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--color-text);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 14px;
+  letter-spacing: 0.04em;
+  color: var(--color-bg);
+}
+
+/* A PDF whose first page isn't drawn yet (or can't be): its name. */
 .fileChip {
   border-radius: var(--radius-sm);
   position: relative;

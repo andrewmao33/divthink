@@ -194,9 +194,22 @@ function Composer({ active, merging }: Props) {
       {images.length > 0 && (
         <div className={styles.thumbs}>
           {images.map((image) => (
-            <div key={image.id} className={image.preview ? styles.thumb : styles.fileChip}>
+            <div
+              key={image.id}
+              className={
+                !image.preview
+                  ? styles.fileChip
+                  : image.mediaType === 'application/pdf'
+                    ? `${styles.thumb} ${styles.thumbPage}`
+                    : styles.thumb
+              }
+              title={image.name}
+            >
               {image.preview ? (
-                <img src={image.preview} alt={image.name} />
+                <>
+                  <img src={image.preview} alt={image.name} />
+                  {image.mediaType === 'application/pdf' && <span className={styles.pdfBadge}>PDF</span>}
+                </>
               ) : (
                 <span className={styles.fileName} title={image.name}>
                   {image.name}

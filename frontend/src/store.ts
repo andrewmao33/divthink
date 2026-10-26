@@ -21,6 +21,7 @@ import { DEMO_ACTIVE, DEMO_TITLE, demoGraph } from './demo'
 import { exchangesOf, labelOf } from './exchanges'
 import { addMissing, applyEvent, fromServer, localEdge, removeNodes, type BoxNode } from './graph'
 import type { Point } from './layout'
+import { pdfPreview } from './pdfPreview'
 import { readStream, type StreamEvent } from './stream'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -28,8 +29,8 @@ type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 // Text highlighted in a reply that the next prompt branches from.
 export type Highlight = { sourceNodeId: string; text: string }
 
-// A file waiting to be sent. `preview` is an object URL, only for images —
-// a PDF shows its name instead.
+// A file waiting to be sent. `preview` is an object URL: the image itself, or
+// a PDF's first page once pdfPreview has drawn it (its name until then).
 export type PendingFile = {
   id: string
   mediaType: string
@@ -559,6 +560,15 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       })),
     )
     set((s) => ({ images: [...s.images, ...read].slice(0, MAX_IMAGES), notice: null }))
+    read.forEach((pending, i) => {
+      if (pending.mediaType !== 'application/pdf') return
+      void pdfPreview(accepted[i]).then((preview) => {
+        if (!preview) return
+        // Removed while it was being drawn: nothing to show it on.
+        if (!get().images.some((image) => image.id === pending.id)) return URL.revokeObjectURL(preview)
+        set((s) => ({ images: s.images.map((image) => (image.id === pending.id ? { ...image, preview } : image)) }))
+      })
+    })
   },
 
   removeImage: (id) =>

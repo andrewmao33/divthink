@@ -36,6 +36,8 @@
   --hover-tint: #ffffff0f;
   /* A card on the way to the active one: brighter than a border, short of active. */
   --color-path: #ffffff59;
+  /* The selected card's outline. */
+  --color-card-outline: var(--color-accent);
   /* An edge on the way to the active card. */
   --edge-lit: #ffffff8c;
   --scrollbar: #ffffff2e;
@@ -75,9 +77,10 @@
    have their own colours (SiteShell.module.css), switched the same way. */
 :root[data-theme='light'] {
   --color-bg: #f4efe6;
-  --color-surface: #ece6da;
-  --color-card: #faf7f1;
-  --color-card-active: #fdfbf7;
+  /* Panels, bars and cards are white, on the eggshell ground. */
+  --color-surface: #ffffff;
+  --color-card: #ffffff;
+  --color-card-active: #ffffff;
   --color-text: #1d1b18;
   --color-text-soft: #4f4c46;
   --color-text-muted: #7a776f;
@@ -92,7 +95,8 @@
   --color-on-accent: #f4efe6;
 
   --hover-tint: #0000000d;
-  --color-path: #00000059;
+  --color-path: #00000033;
+  --color-card-outline: #00000059;
   --edge-lit: #0000008c;
   --scrollbar: #00000033;
   --scrim: #00000040;
