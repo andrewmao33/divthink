@@ -1,6 +1,8 @@
 import heapq
+import re
 from collections import defaultdict
 from collections.abc import Iterator
+from dataclasses import dataclass, field
 from itertools import count
 from uuid import UUID
 
@@ -9,6 +11,10 @@ import asyncpg
 from .providers.base import Attachment, Message
 
 BRANCH_LABEL_MAX = 60
+
+# A branch tag inside a turn's text, which would otherwise end its block early
+# or open a fake one.
+_BRANCH_TAG = re.compile(r"<(/?branch)", re.IGNORECASE)
 
 _ANCESTORS_SQL = """
 WITH RECURSIVE ancestors AS (
@@ -69,15 +75,37 @@ async def assemble_context(
 
     targets = [node_id for node_id in node_ids if node_id in nodes]
     if len(targets) == 1:
-        merge_id, after = _nearest_merge(targets[0], parents_of)
-        if merge_id is not None:
-            # Oldest branch first, so the order doesn't shift between requests.
-            heads = sorted(parents_of[merge_id], key=lambda i: (nodes[i]["created_at"], str(i)))
-            messages = _merged(nodes, edges, merge_id, heads, parents_of)
-            for message in _to_messages([nodes[node_id] for node_id in after]):
-                _append(messages, message.role, message.content, message.attachments)
-            return messages
+        # Everything fetched is above the target, so it is the one node nothing
+        # here continues from.
+        return _conversation(nodes, edges, parents_of, set(nodes))
     return _to_messages(_oldest_first(nodes, edges))
+
+
+def _conversation(
+    nodes: dict, edges: list, parents_of: dict[UUID, list[UUID]], ids: set[UUID]
+) -> list[Message]:
+    """`ids`, a node and everything above it, as messages with real roles.
+
+    A straight line is plain turns. Where the line meets a merge: the history
+    the merged branches share, as a conversation of its own (so an older merge
+    in it is written the same way), then the branches as blocks in one user
+    message with the merge prompt, then the turns after it.
+    """
+    parents = _within(ids, parents_of)
+    sinks = _sinks(nodes, ids, parents)
+    if len(sinks) == 1:
+        merge_id, after = _nearest_merge(sinks[0], parents)
+        if merge_id is None:
+            return _to_messages(_oldest_first(_subset(nodes, ids), edges))
+        heads = sorted(parents[merge_id], key=_age(nodes))
+    else:
+        # Lines that only come together further down, each through merges of
+        # its own: side by side as blocks, with no prompt of their own.
+        merge_id, after, heads = None, [], sinks
+    messages = _merged(nodes, edges, parents, heads, merge_id)
+    for message in _to_messages([nodes[node_id] for node_id in after]):
+        _append(messages, message.role, message.content, message.attachments)
+    return messages
 
 
 def _nearest_merge(
@@ -105,75 +133,143 @@ def _nearest_merge(
 def _merged(
     nodes: dict,
     edges: list,
-    target_id: UUID,
-    branch_heads: list[UUID],
     parents_of: dict[UUID, list[UUID]],
+    branch_heads: list[UUID],
+    target_id: UUID | None,
 ) -> list[Message]:
     """Shared history as a normal conversation, then one <branch> block per branch,
-    then the merge prompt. prompt.py tells the model what those blocks are."""
-    reachable = [_ancestors_of(head, parents_of) for head in branch_heads]
-    shared = set.intersection(*reachable)
+    then the merge prompt (none for lines that meet only further down).
+    prompt.py tells the model what those blocks are.
+
+    The blocks are text, so the files sent in the branches travel with the final
+    message instead, and each block marks where its files were attached.
+    """
+    reachable = {head: _ancestors_of(head, parents_of) for head in branch_heads}
+    shared = set.intersection(*reachable.values())
 
     messages: list[Message] = []
-    for message in _to_messages(_oldest_first(_subset(nodes, shared), edges)):
-        _append(messages, message.role, message.content)
+    for message in _conversation(nodes, edges, parents_of, shared) if shared else []:
+        _append(messages, message.role, message.content, message.attachments)
 
-    # Everything after the branches goes in one final user message.
-    tail = _branch_blocks(
-        nodes, edges, branch_heads, dict(zip(branch_heads, reachable, strict=True)), shared, count(1)
-    )
+    # Everything after the branches goes in one final user message. Should that
+    # join a user message already there, its files come first, so the blocks'
+    # numbering starts after them.
+    joining = messages[-1].attachments if messages and messages[-1].role == "user" else []
+    writer = _Blocks(nodes, edges, parents_of, list(joining))
+    tail = writer.blocks(branch_heads, reachable, shared)
 
-    target = nodes[target_id]
-    quote = _highlight_of(target)
-    if quote:
-        tail.append(quote)
-    tail.append(target["content"].strip())
-    _append(messages, "user", "\n\n".join(part for part in tail if part))
+    files = writer.files[len(joining):]
+    if target_id is not None:
+        target = nodes[target_id]
+        quote = _highlight_of(target)
+        if quote:
+            tail.append(quote)
+        tail.append(target["content"].strip())
+        files += target["attachments"]
+    _append(messages, "user", "\n\n".join(part for part in tail if part), files)
     return messages
 
 
-def _branch_blocks(
-    nodes: dict,
-    edges: list,
-    heads: list[UUID],
-    reachable: dict[UUID, set[UUID]],
-    emitted: set[UUID],
-    numbers: Iterator[int],
-) -> list[str]:
-    """The branches below what has already been written (`emitted`), as blocks.
+@dataclass
+class _Blocks:
+    """Writes branches as <branch> blocks for one message, keeping count of the
+    branches numbered so far and the files the blocks name, in the order named."""
 
-    Branches that share history beyond it are one block: that shared part once,
-    then a block nested inside for each way it splits. Without this, merging
-    three branches where two split late would copy the two's common part into
-    both of their blocks.
-    """
-    rest = {head: reachable[head] - emitted for head in heads}
-    # A selected node that is an ancestor of another one adds nothing of its own.
-    heads = [head for head in heads if rest[head]]
+    nodes: dict
+    edges: list
+    parents_of: dict[UUID, list[UUID]]
+    files: list[Attachment]
+    numbers: Iterator[int] = field(default_factory=lambda: count(1))
 
-    def turns_of(ids: set[UUID]) -> list[Message]:
-        return _to_messages(_oldest_first(_subset(nodes, ids), edges))
+    def blocks(
+        self, heads: list[UUID], reachable: dict[UUID, set[UUID]], emitted: set[UUID]
+    ) -> list[str]:
+        """The branches below what has already been written (`emitted`), as blocks.
 
-    blocks: list[str] = []
-    for group in _overlapping(heads, rest):
-        common = set.intersection(*(rest[head] for head in group))
-        if len(group) == 1 or not common:
-            # On its own; or tied to the others only through a merge further up
-            # inside the branches, which nesting can't express: written out in full.
-            for head in group:
-                turns = turns_of(rest[head])
-                blocks.append(_branch_block(_label(turns, next(numbers)), turns))
-            continue
-        if sum(1 for head in group if rest[head] - common) <= 1:
-            # Only one of them goes on past the shared part (the others are cards
-            # above it): no split, so one block for the whole line.
-            turns = turns_of(set.union(*(rest[head] for head in group)))
-            blocks.append(_branch_block(_label(turns, next(numbers)), turns))
-            continue
-        turns = turns_of(common)
-        inner = _branch_blocks(nodes, edges, group, reachable, emitted | common, numbers)
-        blocks.append(_branch_block(_label(turns, next(numbers)), turns, inner))
-    return blocks
+        Branches that share history beyond it are one block: that shared part once,
+        then a block nested inside for each way it splits. Without this, merging
+        three branches where two split late would copy the two's common part into
+        both of their blocks.
+        """
+        rest = {head: reachable[head] - emitted for head in heads}
+        # A selected node that is an ancestor of another one adds nothing of its own.
+        heads = [head for head in heads if rest[head]]
+
+        blocks: list[str] = []
+        for group in _overlapping(heads, rest):
+            common = set.intersection(*(rest[head] for head in group))
+            if len(group) == 1 or not common:
+                # On its own; or tied to the others only through a merge further
+                # up inside the branches: each written out in full, that merge
+                # included.
+                blocks += [self.block(rest[head]) for head in group]
+                continue
+            if sum(1 for head in group if rest[head] - common) <= 1:
+                # Only one of them goes on past the shared part (the others are cards
+                # above it): no split, so one block for the whole line.
+                blocks.append(self.block(set.union(*(rest[head] for head in group))))
+                continue
+            lines, turns, merged = self.lines(common)  # before the blocks inside it, as it reads
+            inner = self.blocks(group, reachable, emitted | common)
+            blocks.append(_branch_block(self.label(turns, merged), lines, inner))
+        return blocks
+
+    def block(self, ids: set[UUID]) -> str:
+        lines, turns, merged = self.lines(ids)
+        return _branch_block(self.label(turns, merged), lines)
+
+    def lines(self, ids: set[UUID]) -> tuple[list[str], list[Message], bool]:
+        """A branch's own text, the turns written directly in it, and whether it
+        holds a merge.
+
+        A straight line is Prompt/Reply lines. A merge inside the branch is
+        written as the merge message is: what its branches share, the branches
+        as blocks nested here, then the merge prompt and the turns after it.
+        Otherwise its lines would interleave by the time each was sent.
+        """
+        parents = _within(ids, self.parents_of)
+        sinks = _sinks(self.nodes, ids, parents)
+        if len(sinks) == 1:
+            merge_id, after = _nearest_merge(sinks[0], parents)
+            if merge_id is None:
+                turns = _to_messages(_oldest_first(_subset(self.nodes, ids), self.edges))
+                return _turn_lines(turns, self.files), turns, False
+            heads = sorted(parents[merge_id], key=_age(self.nodes))
+            below = [merge_id, *after]
+        else:
+            heads, below = sinks, []
+        reachable = {head: _ancestors_of(head, parents) for head in heads}
+        shared = set.intersection(*reachable.values())
+        lines, turns, _ = self.lines(shared) if shared else ([], [], False)
+        lines += self.blocks(heads, reachable, shared)
+        after_turns = _to_messages([self.nodes[node_id] for node_id in below])
+        lines += _turn_lines(after_turns, self.files)
+        return lines, turns + after_turns, True
+
+    def label(self, turns: list[Message], merged: bool) -> str:
+        label = _label(turns, next(self.numbers))
+        return f"{label} (merged)" if merged else label
+
+
+def _within(ids: set[UUID], parents_of: dict[UUID, list[UUID]]) -> dict[UUID, list[UUID]]:
+    """The parent links among `ids` alone."""
+    return {
+        child: [parent for parent in parents if parent in ids]
+        for child, parents in parents_of.items()
+        if child in ids
+    }
+
+
+def _sinks(nodes: dict, ids: set[UUID], parents_of: dict[UUID, list[UUID]]) -> list[UUID]:
+    """The nodes in `ids` that nothing in `ids` continues from, oldest first."""
+    continued = {parent for child in ids for parent in parents_of.get(child, [])}
+    return sorted(ids - continued, key=_age(nodes))
+
+
+def _age(nodes: dict):
+    """Sort key: oldest first, by id when two were saved together, so the order
+    is the same on every request."""
+    return lambda node_id: (nodes[node_id]["created_at"], str(node_id))
 
 
 def _overlapping(heads: list[UUID], rest: dict[UUID, set[UUID]]) -> list[list[UUID]]:
@@ -215,15 +311,44 @@ def _subset(nodes: dict, ids: set[UUID]) -> dict:
     return {node_id: nodes[node_id] for node_id in ids}
 
 
-def _branch_block(label: str, turns: list[Message], inner: list[str] | None = None) -> str:
+def _branch_block(label: str, lines: list[str], inner: list[str] | None = None) -> str:
     """One branch, flattened. It sits inside a user message, so the turns are
-    labelled rather than carrying real roles. `inner` are the branches it splits
-    into, nested after its own turns."""
-    body = "\n\n".join(
-        [f"{'Prompt' if turn.role == 'user' else 'Reply'}: {turn.content}" for turn in turns]
-        + (inner or [])
-    )
+    labelled rather than carrying real roles (`lines`, from _turn_lines). `inner`
+    are the branches it splits into, nested after its own turns."""
+    body = "\n\n".join(lines + (inner or []))
     return f'<branch label="{label}">\n{body}\n</branch>'
+
+
+def _turn_lines(turns: list[Message], files: list[Attachment]) -> list[str]:
+    """A branch's turns as "Prompt: …" and "Reply: …". A turn's files are added
+    to `files` and named after it, so call this in the order the text reads."""
+    lines = []
+    for turn in turns:
+        line = f"{'Prompt' if turn.role == 'user' else 'Reply'}: {_escape(turn.content)}"
+        if turn.attachments:
+            line += "\n" + _attached(turn.attachments, files)
+        lines.append(line)
+    return lines
+
+
+def _attached(turn_files: list[Attachment], files: list[Attachment]) -> str:
+    """Where a turn's files were, as "[attached: a.pdf (file 2 above)]". The files
+    themselves go with the message the blocks are in, before its text, numbered
+    in the order the blocks name them. A file written out twice (branches tied
+    only through a merge further up repeat their common part) is sent once."""
+    named = []
+    for file in turn_files:
+        number = next((i for i, sent in enumerate(files, 1) if sent is file), None)
+        if number is None:
+            files.append(file)
+            number = len(files)
+        name = file.filename or ("a PDF" if file.is_pdf else "an image")
+        named.append(f"{name} (file {number} above)")
+    return f"[attached: {', '.join(named)}]"
+
+
+def _escape(text: str) -> str:
+    return _BRANCH_TAG.sub(r"&lt;\1", text)
 
 
 def _label(turns: list[Message], number: int) -> str:
@@ -235,7 +360,7 @@ def _label(turns: list[Message], number: int) -> str:
         return f"Branch {number}"
     if len(text) > BRANCH_LABEL_MAX:
         text = text[: BRANCH_LABEL_MAX - 1].rstrip() + "…"
-    return text.replace('"', "'")  # keeps the attribute well-formed
+    return _escape(text).replace('"', "'")  # keeps the attribute well-formed
 
 
 def _oldest_first(nodes: dict, edges: list) -> list:

@@ -12,6 +12,7 @@ import asyncpg
 
 from app.config import settings
 from app.context import assemble_context
+from app.db import _init_connection
 
 
 async def main() -> None:
@@ -22,6 +23,7 @@ async def main() -> None:
         raise SystemExit(1)
 
     conn = await asyncpg.connect(settings.database_url)
+    await _init_connection(conn)  # metadata as dicts, as the app reads it
     try:
         session_id = await conn.fetchval("SELECT session_id FROM nodes WHERE id = $1", node_id)
         if session_id is None:
@@ -33,6 +35,10 @@ async def main() -> None:
 
     for i, m in enumerate(messages, 1):
         print(f"--- {i}. {m.role} ---\n{m.content}\n")
+        for a in m.attachments:
+            print(f"  [file] {a.filename or '(no name)'} · {a.media_type} · {len(a.data):,} bytes")
+        if m.attachments:
+            print()
     print(f"[{len(messages)} message(s)]")
 
 

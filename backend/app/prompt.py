@@ -22,8 +22,11 @@ message. Focus on that passage specifically, not the whole message it came from.
 - A prompt may contain <branch> blocks. Each is a separate thread explored in parallel from \
 the same conversation, or separate threads the user has brought together. A block can hold \
 further blocks after its own turns: those branches continue from it, each in its own \
-direction. Keep them distinct, refer to each by its label, point out where they disagree, and \
-follow the instruction that comes after them.
+direction. A block labelled "(merged)" was itself a merge: it opens with the branches that \
+were brought together, as blocks, then the merge prompt and the turns that followed it. \
+"[attached: …]" after a turn names files sent with it; the files themselves come with the \
+message, numbered in that order. Keep them distinct, refer to each by its label, point out \
+where they disagree, and follow the instruction that comes after them.
 - When the prompt continues a single branch, it is exploring one direction. Go deep on that \
 direction rather than covering the whole topic again.
 

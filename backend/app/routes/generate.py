@@ -1,5 +1,7 @@
+import asyncio
 import base64
 import binascii
+import io
 import logging
 from typing import Literal
 from uuid import UUID
@@ -7,6 +9,7 @@ from uuid import UUID
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
+from pypdf import PdfReader
 
 from ..auth import current_user
 from ..canvas import announce_new_nodes, insert_edges, insert_node
@@ -28,6 +31,8 @@ from .nodes import CardLayout
 
 router = APIRouter(prefix="/sessions", tags=["generate"])
 log = logging.getLogger(__name__)
+# pypdf warns about every damaged PDF it is given; _pages handles those itself.
+logging.getLogger("pypdf").setLevel(logging.ERROR)
 
 MAX_TEXT_CHARS = 50_000  # prompts and quotes
 MAX_ATTACHMENTS = 8
@@ -40,14 +45,31 @@ MAX_PROMPTS_PER_MINUTE = 20  # per user; only a script or a stuck key gets near 
 # and only most of the window is offered, leaving room for the reply itself.
 CHARS_PER_TOKEN = 3
 CONTEXT_SHARE = 0.8
+# Files, by what the providers charge rather than their size in bytes: Claude
+# scales an image down to about 1,600 tokens at most, and reads a PDF page as
+# its text plus a picture of it, 1,500-3,000 tokens. Both err high, like the text.
+TOKENS_PER_IMAGE = 1_600
+TOKENS_PER_PDF_PAGE = 3_000
+# PDFs sent before pages were counted: a guess from the size. Low on purpose,
+# since a scanned page can be ten times this; refusing a send that would have
+# fit is worse than the provider refusing one that doesn't.
+BYTES_PER_PDF_PAGE = 200_000
 
-_HISTORY_CHARS_SQL = """
+# The text above the new prompt, and every file sent with it: what each file
+# was saved as (pages included, for PDFs since they were counted) and its size.
+_HISTORY_SQL = """
 WITH RECURSIVE ancestors AS (
   SELECT id FROM nodes WHERE id = ANY($1::uuid[]) AND session_id = $2
   UNION
   SELECT e.parent_id FROM edges e JOIN ancestors a ON e.child_id = a.id
 )
-SELECT coalesce(sum(length(content)), 0) FROM nodes WHERE id IN (SELECT id FROM ancestors)
+SELECT
+  (SELECT coalesce(sum(length(content)), 0) FROM nodes WHERE id IN (SELECT id FROM ancestors)) AS chars,
+  (SELECT coalesce(jsonb_agg(saved), '[]'::jsonb)
+   FROM nodes n, jsonb_array_elements(n.metadata->'attachments') saved
+   WHERE n.id IN (SELECT id FROM ancestors)) AS files,
+  (SELECT coalesce(jsonb_object_agg(a.id::text, octet_length(a.bytes)), '{}'::jsonb)
+   FROM attachments a WHERE a.node_id IN (SELECT id FROM ancestors)) AS sizes
 """
 
 
@@ -118,6 +140,10 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
         )
 
     files = _decoded(body.attachments)
+    # Counted once, here, so later sends can tell what a PDF costs without reading it.
+    pages = await asyncio.to_thread(
+        lambda: [_pages(data) if kind == "application/pdf" else None for kind, data, _ in files]
+    )
     parent_ids = list(dict.fromkeys(body.parent_ids))  # drop duplicates, keep order
     heights = body.parent_heights
     source_id = body.highlight.source_node_id if body.highlight else None
@@ -160,8 +186,13 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
 
             # Refused here rather than by the provider, whose error would arrive
             # as a failed reply on a card that then has to be deleted.
-            history = await conn.fetchval(_HISTORY_CHARS_SQL, referenced, session_id)
-            tokens = (history + len(body.prompt)) / CHARS_PER_TOKEN
+            history = await conn.fetchrow(_HISTORY_SQL, referenced, session_id)
+            tokens = (history["chars"] + len(body.prompt)) / CHARS_PER_TOKEN
+            for saved in history["files"]:
+                size = history["sizes"].get(saved.get("id"), 0)
+                tokens += _file_tokens(saved.get("media_type"), saved.get("pages"), size)
+            for (media_type, data, _), page_count in zip(files, pages, strict=True):
+                tokens += _file_tokens(media_type, page_count, len(data))
             if tokens > CONTEXT_TOKENS[body.model] * CONTEXT_SHARE:
                 raise HTTPException(
                     status_code=413,
@@ -217,7 +248,7 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
                 # The descriptors go onto the prompt node so the browser knows what
                 # to fetch; the bytes are never part of the graph payload.
                 saved = []
-                for media_type, data, filename in files:
+                for (media_type, data, filename), page_count in zip(files, pages, strict=True):
                     attachment_id = await conn.fetchval(
                         """
                         INSERT INTO attachments (session_id, node_id, media_type, bytes, filename)
@@ -227,6 +258,7 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
                     )
                     saved.append(
                         {"id": str(attachment_id), "media_type": media_type, "filename": filename}
+                        | ({"pages": page_count} if page_count else {})
                     )
                 await conn.execute(
                     "UPDATE nodes SET metadata = metadata || $2::jsonb WHERE id = $1",
@@ -296,6 +328,21 @@ async def _check_rate(conn: asyncpg.Connection, user_id: UUID) -> None:
             status_code=429,
             detail="You're sending prompts too quickly. Wait a moment and try again.",
         )
+
+
+def _pages(data: bytes) -> int | None:
+    """A PDF's page count, or None if it can't be read (damaged, or locked)."""
+    try:
+        return len(PdfReader(io.BytesIO(data)).pages)
+    except Exception:
+        return None
+
+
+def _file_tokens(media_type: str | None, pages: int | None, size: int) -> int:
+    """Roughly what a file adds to the model's context."""
+    if media_type != "application/pdf":
+        return TOKENS_PER_IMAGE
+    return (pages or max(1, size // BYTES_PER_PDF_PAGE)) * TOKENS_PER_PDF_PAGE
 
 
 def _decoded(attachments: list[Attachment]) -> list[tuple[str, bytes, str]]:

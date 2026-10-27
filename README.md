@@ -113,10 +113,13 @@ reaches every open tab over one server-sent event stream per canvas.
 **Context.** What the model sees is assembled on the server from the graph
 (`backend/app/context.py`): the cards above the prompt, oldest first. For a merge, and for
 everything that continues from one, it is the history the branches share, then each branch in
-its own labelled block. To see exactly what would be sent for a node:
+its own labelled block; a merge inside a branch is nested in it the same way. Files sent in
+the branches go with the merge message. To see exactly what would be sent for a node, and to
+run the tests for it:
 
 ```bash
 cd backend && .venv/bin/python -m scripts.show_context <node_id>
+cd backend && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/python -m pytest
 ```
 
 **Layout.** Card positions are worked out in the browser by dagre, one thread at a time. A
