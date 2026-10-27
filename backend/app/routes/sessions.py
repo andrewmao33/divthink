@@ -4,11 +4,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
+from .. import repos
 from ..auth import current_user
 from ..db import get_pool
 from ..generation import cancel_generation
 from ..plans import check_new_canvas
 from ..schemas import Edge, Node
+from .repos import Repo
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -33,6 +35,7 @@ class Session(BaseModel):
 class SessionGraph(Session):
     nodes: list[Node]
     edges: list[Edge]
+    repo: Repo | None = None  # a connected GitHub repo (routes/repos.py)
 
 
 @router.post("", response_model=Session, status_code=201)
@@ -133,4 +136,5 @@ async def get_session(session_id: UUID, user_id: UUID = Depends(current_user)):
         **dict(session),
         "nodes": [dict(n) for n in nodes],
         "edges": [dict(e) for e in edges],
+        "repo": await repos.get(pool, session_id),
     }

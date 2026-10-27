@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # Where Stripe sends people back to after paying or managing their plan.
     app_url: str = "http://localhost:5173"
 
+    # Connected GitHub repos (app/repos.py). Optional: a token of the server's
+    # own, with no scopes, only lifts GitHub's limit of 60 downloads an hour.
+    github_token: str = ""
+
     # Local development only: provider keys for the dev user when none are saved.
     anthropic_api_key: str = ""
     openai_api_key: str = ""

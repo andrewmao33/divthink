@@ -30,6 +30,7 @@ It is free to use with your own Anthropic or Google API key.
 | **Merge** | Pick two or more cards, from one thread or several, and ask one question across them. The model gets their shared history once, then each branch on its own. |
 | **Leaves** | A list of every card you can keep going from, newest first. |
 | **A model per reply** | Claude Sonnet, Claude Opus or Gemini Flash, chosen each time you send. Prompts can carry images and PDFs, and replies can search the web. |
+| **Repos** | Connect a public GitHub repo to a canvas, and replies on it read and search the code before answering. |
 | **Your layout** | Cards are placed automatically, and can be dragged and resized. Tidy puts them back. |
 
 ## Stack
@@ -80,6 +81,7 @@ Backend (`backend/.env`, see `backend/.env.example`):
 | `KEY_ENCRYPTION_KEY` | Encrypts users' saved API keys. Required in production. |
 | `SUPABASE_URL` | Turns sign-in on. Required in production. |
 | `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` | Local development only: the dev user's keys. |
+| `GITHUB_TOKEN` | Optional. A GitHub token with no scopes, which raises GitHub's limit on repo downloads. |
 | `ENVIRONMENT`, `CORS_ORIGINS` | Production only. |
 
 Frontend (`frontend/.env.local`, see `frontend/.env.example`):

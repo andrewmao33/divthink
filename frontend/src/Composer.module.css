@@ -337,3 +337,100 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* The repo button once one is connected: its name beside the icon. */
+.repoOn {
+  width: auto;
+  max-width: 160px;
+  gap: 5px;
+  margin-left: 0;
+  padding: 0 var(--space-2) 0 6px;
+  color: var(--color-text-soft);
+}
+
+.repoName {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Connecting a repo: a link field above the prompt. */
+.repo {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--hover-tint);
+}
+
+.repoCurrent {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.repoCurrent a {
+  color: var(--color-text);
+}
+
+.repoRow {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.repoInput {
+  flex: 1;
+  min-width: 0;
+  padding: 5px var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+  background: var(--color-surface);
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.repoInput:focus {
+  border-color: var(--color-text-muted);
+}
+
+.repoInput::placeholder {
+  color: var(--color-text-muted);
+}
+
+.repoConnect {
+  flex: none;
+  padding: 5px var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-bg);
+  cursor: pointer;
+}
+
+.repoConnect:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.repoHint,
+.repoError {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+}
+
+.repoHint {
+  color: var(--color-text-muted);
+}
+
+.repoError {
+  color: var(--color-error);
+}

@@ -2,7 +2,9 @@ import type { Edge } from '@xyflow/react'
 import { create } from 'zustand'
 import {
   ApiError,
+  connectRepo as putRepo,
   createSession,
+  disconnectRepo as deleteRepo,
   deleteSession,
   deleteNodes,
   generate,
@@ -130,6 +132,10 @@ type CanvasState = {
   clearHighlight: () => void
   addImages: (files: File[]) => Promise<void>
   removeImage: (id: string) => void
+  // Connects a GitHub repo to the canvas, so replies can read its code.
+  // Resolves to null when it worked, or the reason it didn't.
+  connectRepo: (url: string) => Promise<string | null>
+  disconnectRepo: () => void
 }
 
 const MODEL_STORAGE_KEY = 'divthink.model'
@@ -577,6 +583,39 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       if (going?.preview) URL.revokeObjectURL(going.preview) // the object URL leaks otherwise
       return { images: s.images.filter((i) => i.id !== id) }
     }),
+
+  connectRepo: async (url) => {
+    const { session, readOnly, demo } = get()
+    if (!session || readOnly || demo) return null
+    try {
+      let sessionId = session.id
+      if (get().unsaved) {
+        // Connecting a repo is starting work, so the canvas is saved now, as
+        // it would be by the first prompt.
+        sessionId = (await createSession()).id
+        await sync(sessionId)
+        set({ unsaved: false })
+      }
+      const repo = await putRepo(sessionId, url)
+      set((s) => ({ session: s.session?.id === sessionId ? { ...s.session, repo } : s.session }))
+      return null
+    } catch (e) {
+      return messageFor(e)
+    }
+  },
+
+  disconnectRepo: () => {
+    const { session, readOnly, demo } = get()
+    if (!session?.repo || readOnly || demo) return
+    const repo = session.repo
+    set({ session: { ...session, repo: null } })
+    deleteRepo(session.id).catch(() =>
+      set((s) => ({
+        session: s.session?.id === session.id ? { ...s.session, repo } : s.session,
+        notice: "Couldn't disconnect the repo.",
+      })),
+    )
+  },
 }))
 
 // Removes boxes from the canvas and the server, and drops a quote whose reply is gone.

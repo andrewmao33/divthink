@@ -4,7 +4,7 @@ from typing import Any
 
 import anthropic
 
-from .base import Chunk, Message, ProviderError, Usage
+from .base import MAX_TOOL_ROUNDS, Chunk, Message, ProviderError, Toolbox, Usage
 
 MAX_TOKENS = 16000
 
@@ -40,7 +40,12 @@ def _content(message: Message) -> str | list[dict[str, Any]]:
 
 
 async def stream(
-    model: str, messages: list[Message], api_key: str, system: str, web_search: bool = False
+    model: str,
+    messages: list[Message],
+    api_key: str,
+    system: str,
+    web_search: bool = False,
+    toolbox: Toolbox | None = None,
 ) -> AsyncIterator[Chunk]:
     """Yield the reply piece by piece: thinking summaries first, then the answer.
 
@@ -50,6 +55,10 @@ async def stream(
     With `web_search`, Claude may pause mid-turn to search. The API signals that
     with stop_reason "pause_turn"; the turn continues by sending back what it has
     written so far, so this loops until it stops for a different reason.
+
+    With a `toolbox` (a connected repo), Claude may stop to call one of its
+    tools (stop_reason "tool_use"): the tool runs here, its result goes back as
+    the next user turn, and the loop carries on the same way.
     """
     client = anthropic.AsyncAnthropic(api_key=api_key)
     total = Usage()
@@ -68,11 +77,20 @@ async def stream(
         # above it at a tenth of the price instead of paying for it again.
         "cache_control": {"type": "ephemeral"},
     }
-    if web_search:
-        request["tools"] = [WEB_SEARCH_TOOL]
+    tools: list[dict[str, Any]] = [WEB_SEARCH_TOOL] if web_search else []
+    if toolbox:
+        tools += [
+            {"name": t.name, "description": t.description, "input_schema": t.parameters}
+            for t in toolbox.tools
+        ]
+    if tools:
+        request["tools"] = tools
 
+    rounds = 0
+    wrote = False  # any answer text yet, so text after a tool call starts a new paragraph
     try:
         while True:
+            fresh = True
             async with client.messages.stream(messages=turns, **request) as response:
                 async for event in response:
                     if event.type == "content_block_start":
@@ -88,6 +106,9 @@ async def stream(
                     if event.delta.type == "thinking_delta" and event.delta.thinking:
                         yield Chunk("thought", event.delta.thinking)
                     elif event.delta.type == "text_delta" and event.delta.text:
+                        if fresh and wrote:
+                            yield Chunk("text", "\n\n")
+                        fresh, wrote = False, True
                         yield Chunk("text", event.delta.text)
                 final = await response.get_final_message()
 
@@ -100,10 +121,28 @@ async def stream(
             server_tools = getattr(used, "server_tool_use", None)
             total.searches += getattr(server_tools, "web_search_requests", 0) or 0
 
-            if final.stop_reason != "pause_turn":
+            if final.stop_reason == "pause_turn":
+                # Hand back everything written so far and let the turn carry on.
+                turns.append({"role": "assistant", "content": final.content})
+                continue
+            if final.stop_reason != "tool_use" or toolbox is None:
                 break
-            # Hand back everything written so far and let the turn carry on.
+            # Thinking blocks included: the API needs them back to carry on.
             turns.append({"role": "assistant", "content": final.content})
+            results = []
+            for block in final.content:
+                if block.type != "tool_use":
+                    continue
+                yield Chunk("tool", toolbox.describe(block.name, block.input))
+                results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": await toolbox.run(block.name, block.input),
+                })
+            turns.append({"role": "user", "content": results})
+            rounds += 1
+            if rounds >= MAX_TOOL_ROUNDS:
+                request["tool_choice"] = {"type": "none"}  # answer with what it has
     except anthropic.APIStatusError as e:
         raise ProviderError(_friendly_error(e)) from e
     except anthropic.APIConnectionError as e:

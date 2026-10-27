@@ -3,7 +3,7 @@ from collections.abc import AsyncIterator
 from google import genai
 from google.genai import errors, types
 
-from .base import Chunk, Message, ProviderError, Usage
+from .base import MAX_TOOL_ROUNDS, Chunk, Message, ProviderError, Toolbox, Usage
 
 
 def _parts(message: Message) -> list[types.Part]:
@@ -30,52 +30,105 @@ def _to_gemini(messages: list[Message]) -> list[types.Content]:
 
 
 async def stream(
-    model: str, messages: list[Message], api_key: str, system: str, web_search: bool = False
+    model: str,
+    messages: list[Message],
+    api_key: str,
+    system: str,
+    web_search: bool = False,
+    toolbox: Toolbox | None = None,
 ) -> AsyncIterator[Chunk]:
     """Yield the reply piece by piece: thinking summaries first, then the answer.
 
     A client per reply, closed afterwards, so the user's key isn't kept around.
+
+    With a `toolbox` (a connected repo), Gemini may answer with function calls
+    instead of text: they run here, the results go back as the next user turn,
+    and it carries on until it answers without calling anything.
     """
     client = genai.Client(api_key=api_key)
+    tools: list[types.Tool] = []
+    if toolbox:
+        tools.append(types.Tool(function_declarations=[
+            types.FunctionDeclaration(
+                name=t.name, description=t.description, parameters_json_schema=t.parameters
+            )
+            for t in toolbox.tools
+        ]))
+    if web_search:
+        # Google's equivalent of Anthropic's web search tool. Grounding
+        # happens server-side; results come back inside the reply.
+        tools.append(types.Tool(google_search=types.GoogleSearch()))
+    config = types.GenerateContentConfig(
+        # Google's name for the system prompt. Kept out of `contents` so it
+        # isn't part of the conversation history.
+        system_instruction=system,
+        # Our tools are run by the loop below, not by the SDK; turning this off
+        # also silences the SDK's AFC warning.
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+        # Ask for thinking summaries so the UI can show what the model is
+        # working on before the answer starts. Only valid on thinking models.
+        thinking_config=types.ThinkingConfig(include_thoughts=True),
+        tools=tools or None,
+    )
+    contents = _to_gemini(messages)
+    total = Usage()
+    rounds = 0
+    wrote = False  # any answer text yet, so text after a tool call starts a new paragraph
     try:
-        chunks = await client.aio.models.generate_content_stream(
-            model=model,
-            contents=_to_gemini(messages),
-            config=types.GenerateContentConfig(
-                # Google's name for the system prompt. Kept out of `contents` so it
-                # isn't part of the conversation history.
-                system_instruction=system,
-                # We don't give the model Python functions to call; turning this off
-                # also silences the SDK's AFC warning.
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-                # Ask for thinking summaries so the UI can show what the model is
-                # working on before the answer starts. Only valid on thinking models.
-                thinking_config=types.ThinkingConfig(include_thoughts=True),
-                # Google's equivalent of Anthropic's web search tool. Grounding
-                # happens server-side; results come back inside the reply.
-                tools=[types.Tool(google_search=types.GoogleSearch())] if web_search else None,
-            ),
-        )
-        total = Usage()
-        async for chunk in chunks:
-            # Each chunk carries running totals; the last one wins.
-            meta = getattr(chunk, "usage_metadata", None)
-            if meta is not None:
-                # prompt_token_count includes the cached part, and thinking is
-                # counted apart from the answer but billed as output.
-                cached = getattr(meta, "cached_content_token_count", 0) or 0
-                total = Usage(
-                    (getattr(meta, "prompt_token_count", 0) or 0) - cached,
-                    (getattr(meta, "candidates_token_count", 0) or 0)
-                    + (getattr(meta, "thoughts_token_count", 0) or 0),
-                    cached,
+        while True:
+            chunks = await client.aio.models.generate_content_stream(
+                model=model, contents=contents, config=config
+            )
+            used = Usage()
+            said: list[types.Part] = []  # everything this round, to hand back with the results
+            calls: list[types.FunctionCall] = []
+            fresh = True
+            async for chunk in chunks:
+                # Each chunk carries running totals for this request; the last one wins.
+                meta = getattr(chunk, "usage_metadata", None)
+                if meta is not None:
+                    # prompt_token_count includes the cached part, and thinking is
+                    # counted apart from the answer but billed as output.
+                    cached = getattr(meta, "cached_content_token_count", 0) or 0
+                    used = Usage(
+                        (getattr(meta, "prompt_token_count", 0) or 0) - cached,
+                        (getattr(meta, "candidates_token_count", 0) or 0)
+                        + (getattr(meta, "thoughts_token_count", 0) or 0),
+                        cached,
+                    )
+                # chunk.text skips thought parts, so read the parts directly.
+                for candidate in chunk.candidates or []:
+                    parts = candidate.content.parts if candidate.content else None
+                    for part in parts or []:
+                        said.append(part)  # thought signatures included, which Gemini needs back
+                        if part.function_call:
+                            calls.append(part.function_call)
+                        elif part.text:  # skip empty and non-text parts
+                            if part.thought:
+                                yield Chunk("thought", part.text)
+                                continue
+                            if fresh and wrote:
+                                yield Chunk("text", "\n\n")
+                            fresh, wrote = False, True
+                            yield Chunk("text", part.text)
+            total = total + used
+            if not calls or toolbox is None:
+                break
+            contents.append(types.Content(role="model", parts=said))
+            answers = []
+            for call in calls:
+                name, args = call.name or "", dict(call.args or {})
+                yield Chunk("tool", toolbox.describe(name, args))
+                answers.append(types.Part(function_response=types.FunctionResponse(
+                    id=call.id, name=name, response={"result": await toolbox.run(name, args)}
+                )))
+            contents.append(types.Content(role="user", parts=answers))
+            rounds += 1
+            if rounds >= MAX_TOOL_ROUNDS:
+                # Answer with what it has.
+                config.tool_config = types.ToolConfig(
+                    function_calling_config=types.FunctionCallingConfig(mode="NONE")
                 )
-            # chunk.text skips thought parts, so read the parts directly.
-            for candidate in chunk.candidates or []:
-                parts = candidate.content.parts if candidate.content else None
-                for part in parts or []:
-                    if part.text:  # skip empty and non-text parts
-                        yield Chunk("thought" if part.thought else "text", part.text)
         yield Chunk("usage", usage=total)
     except errors.APIError as e:
         raise ProviderError(_friendly_error(e)) from e

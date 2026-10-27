@@ -41,6 +41,17 @@ export type Session = {
   default_model: string | null
   created_at: string
   updated_at: string
+  // A GitHub repo connected to the canvas; only on a loaded canvas.
+  repo?: Repo | null
+}
+
+export type Repo = {
+  owner: string
+  name: string
+  ref: string
+  sha: string
+  file_count: number
+  truncated: boolean
 }
 
 export type SessionGraph = Session & {
@@ -98,6 +109,19 @@ export function renameSession(id: string, title: string): Promise<void> {
 // Deletes a canvas and everything on it. There is no undo.
 export function deleteSession(id: string): Promise<void> {
   return request(`/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+// Downloads a public GitHub repo and connects it to the canvas, replacing any
+// connected before. Takes a few seconds.
+export function connectRepo(sessionId: string, url: string): Promise<Repo> {
+  return request(`/sessions/${encodeURIComponent(sessionId)}/repo`, {
+    method: 'PUT',
+    body: JSON.stringify({ url }),
+  })
+}
+
+export function disconnectRepo(sessionId: string): Promise<void> {
+  return request(`/sessions/${encodeURIComponent(sessionId)}/repo`, { method: 'DELETE' })
 }
 
 export function getSession(id: string): Promise<SessionGraph> {

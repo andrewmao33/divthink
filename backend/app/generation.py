@@ -4,12 +4,12 @@ import time
 from collections.abc import AsyncIterator, Callable, Iterable
 from uuid import UUID
 
-from . import events
+from . import events, repos
 from .context import assemble_context
 from .db import get_pool
 from .prompt import BASE_PROMPT
 from .providers import claude, gemini
-from .providers.base import Chunk, Message, ProviderError
+from .providers.base import Chunk, Message, ProviderError, Toolbox
 from .providers.catalog import MODELS
 from .thinking import thought_headings
 from .titles import canvas_title_for, title_for, title_from_prompt
@@ -22,8 +22,10 @@ log = logging.getLogger(__name__)
 MAX_CONCURRENT = 30
 
 # Provider name (from providers/catalog.py) -> its stream function
-# (model, messages, api_key, system).
-PROVIDERS: dict[str, Callable[[str, list[Message], str, str], AsyncIterator[Chunk]]] = {
+# (model, messages, api_key, system, web_search, toolbox).
+PROVIDERS: dict[
+    str, Callable[[str, list[Message], str, str, bool, Toolbox | None], AsyncIterator[Chunk]]
+] = {
     "google": gemini.stream,
     "anthropic": claude.stream,
 }
@@ -86,6 +88,12 @@ async def _generate(
             )
             events.start_reply(session_id, node)
             messages = await assemble_context(pool, session_id, [user_node_id])
+            # A connected repo adds its map to the system prompt, after the
+            # fixed part, and the tools to read it.
+            system, toolbox = BASE_PROMPT, None
+            repo = await repos.for_reply(pool, session_id)
+            if repo is not None:
+                system, toolbox = BASE_PROMPT + repo[0], repo[1]
 
             stream = PROVIDERS[MODELS[model]]
             thoughts = answer = ""
@@ -94,16 +102,17 @@ async def _generate(
             headings_sent = 0
             started = time.monotonic()
             thinking_seconds = None  # request start -> first answer text, if it thought
-            async for chunk in stream(model, messages, api_key, BASE_PROMPT, web_search):
+            async for chunk in stream(model, messages, api_key, system, web_search, toolbox):
                 if chunk.kind == "usage":
                     usage = chunk.usage
-                elif chunk.kind == "search":
-                    # Reuses the thinking channel, so a search shows up in the UI
-                    # exactly like a thinking heading does.
+                elif chunk.kind in ("search", "tool"):
+                    # Reuses the thinking channel, so a search or a file being
+                    # read shows up in the UI exactly like a thinking heading does.
                     if not announced:
                         events.reply_thinking(session_id, node)
                         announced = True
-                    events.reply_thought(session_id, node, f"Searching: {chunk.text}")
+                    label = f"Searching: {chunk.text}" if chunk.kind == "search" else chunk.text
+                    events.reply_thought(session_id, node, label)
                 elif chunk.kind == "thought":
                     if not announced:
                         events.reply_thinking(session_id, node)

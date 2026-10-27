@@ -48,6 +48,9 @@ each branch on its own, labelled.
 - Leaves: a list of every card the user can keep going from, newest first.
 - A model per reply: the user picks the model each time they send, from Claude and Gemini \
 models. Prompts can include images and PDFs, and replies can search the web.
+- Repos: the repo button beside the paperclip connects a public GitHub repo to the canvas. \
+Replies on that canvas can then list, read and search its code. One repo per canvas; the same \
+button changes or disconnects it.
 - Layout: cards are placed automatically and can be dragged and resized. Tidy puts every \
 card back where the automatic layout would. Right-click a card to delete it, which only works \
 on a card nothing continues from.

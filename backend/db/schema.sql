@@ -88,6 +88,27 @@ CREATE TABLE attachments (
 
 CREATE INDEX attachments_node_id_idx ON attachments (node_id);
 
+-- A GitHub repo connected to a canvas (app/repos.py): one per canvas, its
+-- text files kept here so replies can read and search them.
+CREATE TABLE repos (
+  session_id  uuid PRIMARY KEY REFERENCES sessions (id) ON DELETE CASCADE,
+  owner       text NOT NULL,
+  name        text NOT NULL,
+  ref         text NOT NULL,  -- the branch (or tag) it was downloaded from
+  sha         text NOT NULL,  -- the commit, so a reply can say which version it read
+  file_count  integer NOT NULL,
+  total_bytes integer NOT NULL,
+  truncated   boolean NOT NULL DEFAULT false,  -- some files left out to stay under the cap
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE repo_files (
+  session_id uuid NOT NULL REFERENCES repos (session_id) ON DELETE CASCADE,
+  path       text NOT NULL,
+  content    text NOT NULL,
+  PRIMARY KEY (session_id, path)
+);
+
 -- Ancestor walk: find a node's parents by child_id.
 -- (Lookups by parent_id use the UNIQUE (parent_id, child_id) index.)
 CREATE INDEX edges_child_id_idx ON edges (child_id);
@@ -123,3 +144,5 @@ ALTER TABLE nodes    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE edges    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE attachments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usage_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE repos    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE repo_files ENABLE ROW LEVEL SECURITY;

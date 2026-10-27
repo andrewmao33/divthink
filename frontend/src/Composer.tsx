@@ -39,6 +39,8 @@ function Composer({ active, merging }: Props) {
     openSettings,
     addImages,
     removeImage,
+    repo,
+    readOnly,
   } = useCanvasStore(
     useShallow((s) => ({
       demo: s.demo,
@@ -61,10 +63,13 @@ function Composer({ active, merging }: Props) {
       openSettings: s.openSettings,
       addImages: s.addImages,
       removeImage: s.removeImage,
+      repo: s.session?.repo ?? null,
+      readOnly: s.readOnly,
     })),
   )
   const [text, setText] = useState('')
   const [dragging, setDragging] = useState(false)
+  const [repoOpen, setRepoOpen] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   // Signed in but no API key saved yet: nothing can be sent.
@@ -103,6 +108,11 @@ function Composer({ active, merging }: Props) {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [demo])
+
+  function closeRepo() {
+    setRepoOpen(false)
+    inputRef.current?.focus()
+  }
 
   async function submit() {
     const prompt = text.trim()
@@ -227,6 +237,8 @@ function Composer({ active, merging }: Props) {
           ))}
         </div>
       )}
+      {repoOpen && <RepoForm onClose={closeRepo} />}
+
       {highlight && (
         <div className={styles.quote}>
           <p className={styles.quoteText}>{highlight.text}</p>
@@ -288,6 +300,23 @@ function Composer({ active, merging }: Props) {
             <path d="M9.5 4 5 8.5a2.1 2.1 0 0 0 3 3l4.5-4.5a3.5 3.5 0 0 0-5-5L3 6.5a5 5 0 0 0 7 7L13.5 10" />
           </svg>
         </button>
+        {!demo && !readOnly && (
+          <button
+            type="button"
+            className={`${styles.attach} ${repo ? styles.repoOn : ''}`}
+            onClick={() => setRepoOpen((open) => !open)}
+            title={
+              repo
+                ? `${repo.owner}/${repo.name} is connected · ${repo.file_count} files`
+                : 'Connect a GitHub repo'
+            }
+            aria-label={repo ? `Connected repo: ${repo.owner}/${repo.name}` : 'Connect a GitHub repo'}
+            aria-expanded={repoOpen}
+          >
+            <RepoIcon />
+            {repo && <span className={styles.repoName}>{repo.name}</span>}
+          </button>
+        )}
         {model && models.some((m) => m.available) && (
           <select
             className={styles.model}
@@ -326,6 +355,91 @@ function Composer({ active, merging }: Props) {
         )}
       </div>
     </form>
+  )
+}
+
+// Connecting a repo, or changing or disconnecting the one connected. Opened by
+// the repo button in the row below the prompt.
+function RepoForm({ onClose }: { onClose: () => void }) {
+  const repo = useCanvasStore((s) => s.session?.repo ?? null)
+  const connectRepo = useCanvasStore((s) => s.connectRepo)
+  const disconnectRepo = useCanvasStore((s) => s.disconnectRepo)
+  const [url, setUrl] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function connect() {
+    if (!url.trim() || busy) return
+    setBusy(true)
+    setError(null)
+    const failed = await connectRepo(url.trim())
+    setBusy(false)
+    if (failed) setError(failed)
+    else onClose()
+  }
+
+  return (
+    <div className={styles.repo}>
+      {repo && (
+        <div className={styles.repoCurrent}>
+          <span className={styles.statusText}>
+            <a href={`https://github.com/${repo.owner}/${repo.name}/tree/${repo.sha}`} target="_blank" rel="noreferrer">
+              {repo.owner}/{repo.name}
+            </a>{' '}
+            · {repo.ref} · {repo.file_count} files{repo.truncated ? ' (some left out)' : ''}
+          </span>
+          <button
+            type="button"
+            className={styles.textButton}
+            onClick={() => {
+              disconnectRepo()
+              onClose()
+            }}
+          >
+            Disconnect
+          </button>
+        </div>
+      )}
+      <div className={styles.repoRow}>
+        <input
+          className={styles.repoInput}
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            // The prompt's form is around this: Enter connects, it doesn't send.
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              void connect()
+            } else if (e.key === 'Escape') {
+              e.stopPropagation()
+              onClose()
+            }
+          }}
+          placeholder={repo ? 'Another repo: github.com/owner/repo' : 'github.com/owner/repo'}
+          aria-label="GitHub repo link"
+          disabled={busy}
+          autoFocus
+        />
+        <button type="button" className={styles.repoConnect} onClick={() => void connect()} disabled={busy || !url.trim()}>
+          {busy ? 'Downloading…' : 'Connect'}
+        </button>
+      </div>
+      {error ? (
+        <p className={styles.repoError}>{error}</p>
+      ) : (
+        !repo && <p className={styles.repoHint}>Public repos. Replies on this canvas can then read and search its code.</p>
+      )}
+    </div>
+  )
+}
+
+// A repository: a book with a bookmark, as GitHub draws one.
+function RepoIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+      <path d="M3.5 12.5V3a1.5 1.5 0 0 1 1.5-1.5h7.5v9H5a1.5 1.5 0 0 0-1.5 1.5Zm0 0A1.5 1.5 0 0 0 5 14h1.5M12.5 10.5V14H9" />
+      <path d="M6.5 12.5v3l1.25-1 1.25 1v-3Z" />
+    </svg>
   )
 }
 
