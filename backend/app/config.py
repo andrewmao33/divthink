@@ -33,7 +33,6 @@ class Settings(BaseSettings):
 
     # Local development only: provider keys for the dev user when none are saved.
     anthropic_api_key: str = ""
-    openai_api_key: str = ""
     google_api_key: str = ""
 
     @property

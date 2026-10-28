@@ -4,8 +4,6 @@
 CREATE TABLE users (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email       text NOT NULL UNIQUE,
-  google_sub  text UNIQUE,
-  auto_branch boolean NOT NULL DEFAULT true,
   plan        text NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'pro_max')),
   stripe_customer_id text UNIQUE,  -- set when they first go to checkout
   plan_chosen_at timestamptz,  -- picked a plan after signing up (Plans.tsx); empty until then
@@ -16,7 +14,7 @@ CREATE TABLE users (
 CREATE TABLE api_keys (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id       uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  provider      text NOT NULL CHECK (provider IN ('anthropic', 'google', 'openai')),
+  provider      text NOT NULL CHECK (provider IN ('anthropic', 'google')),
   encrypted_key bytea NOT NULL,
   created_at    timestamptz NOT NULL DEFAULT now(),
   UNIQUE (user_id, provider)
@@ -112,6 +110,9 @@ CREATE TABLE repo_files (
 -- Ancestor walk: find a node's parents by child_id.
 -- (Lookups by parent_id use the UNIQUE (parent_id, child_id) index.)
 CREATE INDEX edges_child_id_idx ON edges (child_id);
+
+-- Loading a canvas: all its edges.
+CREATE INDEX edges_session_id_idx ON edges (session_id);
 
 -- What every model call cost, per user (app/usage.py). No foreign key to nodes:
 -- deleting a card or canvas keeps its cost on record, so an allowance can't be
