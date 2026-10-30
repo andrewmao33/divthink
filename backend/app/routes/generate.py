@@ -207,8 +207,8 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
             ]
 
             # The quote rides on the prompt node rather than being a node of its own,
-            # so branching makes two boxes instead of three. The reply it came from
-            # is the prompt's parent, so the chain stays reply -> prompt -> reply.
+            # so branching makes two nodes instead of three. The browser sends the
+            # reply it came from as the prompt's parent: reply -> prompt -> reply.
             prompt_metadata: dict = {}
             if body.layout:
                 prompt_metadata["layout"] = body.layout.model_dump(exclude_none=True)
@@ -217,9 +217,6 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
                     "source_node_id": str(source_id),
                     "text": body.highlight.text,
                 }
-                if not any(p[0] == source_id for p in parents):
-                    source = found[source_id]
-                    parents = parents + [(source_id, source["position_x"], source["position_y"])]
 
             ux, uy = await prompt_position(conn, session_id, parents, heights, source_id)
             # The prompt and its reply are placed together, reserving the room the
