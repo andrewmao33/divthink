@@ -52,10 +52,7 @@ async def check_new_card(conn: asyncpg.Connection, user_id: UUID, session_id: UU
     plan = PLANS[await plan_of(conn, user_id)]
     if plan.cards_per_canvas is None:
         return
-    # A card is a prompt and its reply, so prompts are what's counted.
-    count = await conn.fetchval(
-        "SELECT count(*) FROM nodes WHERE session_id = $1 AND type = 'user'", session_id
-    )
+    count = await conn.fetchval("SELECT count(*) FROM nodes WHERE session_id = $1", session_id)
     if count >= plan.cards_per_canvas:
         raise HTTPException(
             status_code=402,

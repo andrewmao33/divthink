@@ -98,62 +98,47 @@ async def main() -> None:
             await conn.execute("UPDATE sessions SET is_public = true WHERE id = $1", session_id)
             await conn.execute("DELETE FROM nodes WHERE session_id = $1", session_id)
 
-        async def node(type_, content, x, y, title=None, highlight=None, model=None):
-            metadata = {}
-            if title:
-                metadata["title"] = title
+        async def card(prompt, response, x, y, title, parents=(), highlight=None):
+            metadata = {"title": title}
             if highlight:
                 metadata["highlight"] = highlight
-            return await conn.fetchval(
+            card_id = await conn.fetchval(
                 """
-                INSERT INTO nodes (session_id, type, content, model, position_x, position_y, status, metadata)
+                INSERT INTO nodes (session_id, prompt, response, model, position_x, position_y, status, metadata)
                 VALUES ($1, $2, $3, $4, $5, $6, 'complete', $7) RETURNING id
                 """,
-                session_id, type_, content, model, x, y, metadata,
+                session_id, prompt, response, "claude-sonnet-5", x, y, metadata,
             )
+            for parent in parents:
+                await conn.execute(
+                    "INSERT INTO edges (session_id, parent_id, child_id) VALUES ($1, $2, $3)",
+                    session_id, parent, card_id,
+                )
+            return card_id
 
-        model = "claude-sonnet-5"
+        def tall(prompt, response, quoted=False):
+            return height(prompt, quoted) + GAP + height(response)
+
         boxes: list[tuple[float, float, float]] = []  # (x, y, height)
 
-        # Left: the original thread running down, its second branch stepping right
-        # so the two replies don't sit in one straight column.
+        # Left: the original thread running down, its second branch below it.
         y = 0
-        q0 = await node("user", ROOT_Q, COL[0], y)
-        boxes.append((COL[0], y, height(ROOT_Q)))
-        y += height(ROOT_Q) + GAP
-        a0 = await node("assistant", ROOT_A, COL[0], y, "Postgres or MongoDB, honestly", model=model)
-        boxes.append((COL[0], y, height(ROOT_A)))
-        y += height(ROOT_A) + GAP
-        q2 = await node("user", BRANCH_2_Q, COL[0], y)
-        boxes.append((COL[0], y, height(BRANCH_2_Q)))
-        y += height(BRANCH_2_Q) + GAP
-        a2 = await node("assistant", BRANCH_2_A, COL[0], y, "What sharding actually buys", model=model)
-        boxes.append((COL[0], y, height(BRANCH_2_A)))
+        c0 = await card(ROOT_Q, ROOT_A, COL[0], y, "Postgres or MongoDB, honestly")
+        boxes.append((COL[0], y, tall(ROOT_Q, ROOT_A)))
+        y += tall(ROOT_Q, ROOT_A) + GAP
+        c2 = await card(BRANCH_2_Q, BRANCH_2_A, COL[0], y, "What sharding actually buys", [c0])
+        boxes.append((COL[0], y, tall(BRANCH_2_Q, BRANCH_2_A)))
 
-        # Middle: the branch taken off a highlight, beside the reply it came from.
+        # Middle: the branch taken off a highlight, beside the card it came from.
         y = 90
-        q1 = await node("user", BRANCH_1_Q, COL[1], y,
-                        highlight={"source_node_id": str(a0), "text": BRANCH_1_QUOTE})
-        boxes.append((COL[1], y, height(BRANCH_1_Q, quoted=True)))
-        y += height(BRANCH_1_Q, quoted=True) + GAP
-        a1 = await node("assistant", BRANCH_1_A, COL[1], y, "Ordering messages with a sequence", model=model)
-        boxes.append((COL[1], y, height(BRANCH_1_A)))
+        c1 = await card(BRANCH_1_Q, BRANCH_1_A, COL[1], y, "Ordering messages with a sequence", [c0],
+                        highlight={"source_node_id": str(c0), "text": BRANCH_1_QUOTE})
+        boxes.append((COL[1], y, tall(BRANCH_1_Q, BRANCH_1_A, quoted=True)))
 
         # Right: the merge, drawing a line in from each branch.
         y = 340
-        q3 = await node("user", MERGE_Q, COL[2], y)
-        boxes.append((COL[2], y, height(MERGE_Q)))
-        y += height(MERGE_Q) + GAP
-        a3 = await node("assistant", MERGE_A, COL[2], y, "Why Postgres wins here", model=model)
-        boxes.append((COL[2], y, height(MERGE_A)))
-
-        for parent, child in [
-            (q0, a0), (a0, q1), (q1, a1), (a0, q2), (q2, a2), (a1, q3), (a2, q3), (q3, a3),
-        ]:
-            await conn.execute(
-                "INSERT INTO edges (session_id, parent_id, child_id) VALUES ($1, $2, $3)",
-                session_id, parent, child,
-            )
+        await card(MERGE_Q, MERGE_A, COL[2], y, "Why Postgres wins here", [c1, c2])
+        boxes.append((COL[2], y, tall(MERGE_Q, MERGE_A)))
 
         # Proven, not eyeballed: nothing may cover anything else.
         rects = [(x, y, x + BOX_WIDTH, y + h) for x, y, h in boxes]

@@ -120,7 +120,7 @@ async def get_session(session_id: UUID, user_id: UUID = Depends(current_user)):
 
     nodes = await pool.fetch(
         """
-        SELECT id, type, content, model, position_x, position_y,
+        SELECT id, prompt, response, model, position_x, position_y,
                status, metadata, created_at
         FROM nodes
         WHERE session_id = $1

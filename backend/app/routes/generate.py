@@ -16,14 +16,7 @@ from ..canvas import announce_new_nodes, insert_edges, insert_node
 from ..db import get_pool
 from ..generation import start_generation
 from ..keys import api_key_for
-from ..layout import (
-    GAP_BELOW_Y,
-    Placed,
-    estimate_prompt_height,
-    free_block,
-    reserved_block,
-    prompt_position,
-)
+from ..layout import Placed, free_block, prompt_position, reserved_block
 from ..plans import check_new_card
 from ..titles import title_from_prompt
 from ..providers.catalog import CONTEXT_TOKENS, DEFAULT_MODEL, LABELS, MODELS, PROVIDER_LABELS
@@ -64,7 +57,7 @@ WITH RECURSIVE ancestors AS (
   SELECT e.parent_id FROM edges e JOIN ancestors a ON e.child_id = a.id
 )
 SELECT
-  (SELECT coalesce(sum(length(content)), 0) FROM nodes WHERE id IN (SELECT id FROM ancestors)) AS chars,
+  (SELECT coalesce(sum(length(prompt) + length(response)), 0) FROM nodes WHERE id IN (SELECT id FROM ancestors)) AS chars,
   (SELECT coalesce(jsonb_agg(saved), '[]'::jsonb)
    FROM nodes n, jsonb_array_elements(n.metadata->'attachments') saved
    WHERE n.id IN (SELECT id FROM ancestors)) AS files,
@@ -107,19 +100,17 @@ class GenerateRequest(BaseModel):
     parent_heights: dict[UUID, float] = Field(default={}, max_length=500)
     attachments: list[Attachment] = Field(default=[], max_length=MAX_ATTACHMENTS)
     web_search: bool = False
-    # Ids for the two new nodes, picked by the browser so it can draw them before
-    # this request returns. Optional: without them the database picks.
-    user_node_id: UUID | None = None
-    assistant_node_id: UUID | None = None
-    # Where the prompt's card goes, for a new thread started at a chosen spot.
+    # Id for the new card, picked by the browser so it can draw it before this
+    # request returns. Optional: without it the database picks.
+    node_id: UUID | None = None
+    # Where the card goes, for a new thread started at a chosen spot.
     layout: CardLayout | None = None
 
     _check_prompt = field_validator("prompt")(_not_blank)
 
 
 class GenerateResponse(BaseModel):
-    user_node_id: UUID
-    assistant_node_id: UUID
+    node_id: UUID
     session_title: str  # set from the first prompt, so the canvas list can update
 
 
@@ -127,7 +118,7 @@ class GenerateResponse(BaseModel):
 
 @router.post("/{session_id}/generate", response_model=GenerateResponse, status_code=201)
 async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depends(current_user)):
-    """Save the prompt and an empty reply node. The AI fills the reply in later."""
+    """Save a card with the prompt and an empty response. The AI fills the response in later."""
     if body.model not in MODELS:
         raise HTTPException(status_code=422, detail=f"Unsupported model: {body.model}")
     provider = MODELS[body.model]
@@ -206,44 +197,35 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
                 (p, found[p]["position_x"], found[p]["position_y"]) for p in parent_ids
             ]
 
-            # The quote rides on the prompt node rather than being a node of its own,
-            # so branching makes two nodes instead of three. The browser sends the
-            # reply it came from as the prompt's parent: reply -> prompt -> reply.
-            prompt_metadata: dict = {}
+            # The quote rides on the card rather than being a node of its own. The
+            # browser sends the card it came from as a parent.
+            metadata: dict = {}
             if body.layout:
-                prompt_metadata["layout"] = body.layout.model_dump(exclude_none=True)
+                metadata["layout"] = body.layout.model_dump(exclude_none=True)
             if body.highlight:
-                prompt_metadata["highlight"] = {
+                metadata["highlight"] = {
                     "source_node_id": str(source_id),
                     "text": body.highlight.text,
                 }
 
-            ux, uy = await prompt_position(conn, session_id, parents, heights, source_id)
-            # The prompt and its reply are placed together, reserving the room the
-            # reply will need once it has finished streaming — not the room it
-            # takes while still empty.
-            ux, uy = await free_block(
-                conn, session_id, ux, uy, reserved_block(body.prompt, len(files)), heights
+            x, y = await prompt_position(conn, session_id, parents, heights, source_id)
+            # Reserves the room the card will need once its response has finished
+            # streaming — not the room it takes while still empty.
+            x, y = await free_block(
+                conn, session_id, x, y, reserved_block(body.prompt, len(files)), heights
             )
             try:
-                user_node_id = await insert_node(
-                    conn, session_id, "user", body.prompt, "complete", ux, uy,
-                    metadata=prompt_metadata, id=body.user_node_id,
-                )
-                assistant_id = await insert_node(
-                    conn, session_id, "assistant", "", "pending",
-                    ux, uy + estimate_prompt_height(body.prompt, len(files)) + GAP_BELOW_Y,
-                    model=body.model, id=body.assistant_node_id,
+                node_id = await insert_node(
+                    conn, session_id, body.prompt, "pending", x, y,
+                    model=body.model, metadata=metadata, id=body.node_id,
                 )
             except asyncpg.UniqueViolationError:
-                # A browser-picked id that is already in use (or the same id twice).
+                # A browser-picked id that is already in use.
                 raise HTTPException(status_code=409, detail="Couldn't save that prompt. Try again.")
-            await insert_edges(
-                conn, session_id, [(p[0], user_node_id) for p in parents] + [(user_node_id, assistant_id)]
-            )
+            await insert_edges(conn, session_id, [(p[0], node_id) for p in parents])
             if files:
-                # The descriptors go onto the prompt node so the browser knows what
-                # to fetch; the bytes are never part of the graph payload.
+                # The descriptors go onto the card so the browser knows what to
+                # fetch; the bytes are never part of the graph payload.
                 saved = []
                 for (media_type, data, filename), page_count in zip(files, pages, strict=True):
                     attachment_id = await conn.fetchval(
@@ -251,7 +233,7 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
                         INSERT INTO attachments (session_id, node_id, media_type, bytes, filename)
                         VALUES ($1, $2, $3, $4, $5) RETURNING id
                         """,
-                        session_id, user_node_id, media_type, data, filename or None,
+                        session_id, node_id, media_type, data, filename or None,
                     )
                     saved.append(
                         {"id": str(attachment_id), "media_type": media_type, "filename": filename}
@@ -259,7 +241,7 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
                     )
                 await conn.execute(
                     "UPDATE nodes SET metadata = metadata || $2::jsonb WHERE id = $1",
-                    user_node_id, {"attachments": saved},
+                    node_id, {"attachments": saved},
                 )
 
             session_title = await conn.fetchval(
@@ -274,15 +256,11 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
             )
 
     # Only after the transaction has committed, so listeners and the job can see
-    # the new nodes. Announce first so tabs draw the boxes before any tokens arrive.
-    await announce_new_nodes(session_id, [user_node_id, assistant_id])
-    start_generation(session_id, user_node_id, assistant_id, body.model, api_key, body.web_search)
+    # the new card. Announce first so tabs draw it before any tokens arrive.
+    await announce_new_nodes(session_id, [node_id])
+    start_generation(session_id, node_id, body.model, api_key, body.web_search)
 
-    return GenerateResponse(
-        user_node_id=user_node_id,
-        assistant_node_id=assistant_id,
-        session_title=session_title,
-    )
+    return GenerateResponse(node_id=node_id, session_title=session_title)
 
 
 async def _check_running(conn: asyncpg.Connection, user_id: UUID) -> None:
@@ -292,7 +270,6 @@ async def _check_running(conn: asyncpg.Connection, user_id: UUID) -> None:
         SELECT count(*) FROM nodes n
         JOIN sessions s ON s.id = n.session_id
         WHERE s.user_id = $1
-          AND n.type = 'assistant'
           AND n.status IN ('pending', 'streaming')
         """,
         user_id,
@@ -315,7 +292,6 @@ async def _check_rate(conn: asyncpg.Connection, user_id: UUID) -> None:
         SELECT count(*) FROM nodes n
         JOIN sessions s ON s.id = n.session_id
         WHERE s.user_id = $1
-          AND n.type = 'user'
           AND n.created_at > now() - interval '1 minute'
         """,
         user_id,

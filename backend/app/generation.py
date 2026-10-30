@@ -31,25 +31,22 @@ PROVIDERS: dict[
 }
 
 _slots = asyncio.Semaphore(MAX_CONCURRENT)
-# Reply node id -> its running job. Keeps the task from being garbage-collected,
+# Card id -> its running job. Keeps the task from being garbage-collected,
 # and lets a delete stop a reply that is still being written.
 _jobs: dict[UUID, asyncio.Task] = {}
 
 
 def start_generation(
     session_id: UUID,
-    user_node_id: UUID,
-    assistant_node_id: UUID,
+    node_id: UUID,
     model: str,
     api_key: str,
     web_search: bool = False,
 ) -> asyncio.Task:
-    """Fill in `assistant_node_id` in the background with the user's key. Returns immediately."""
-    task = asyncio.create_task(
-        _generate(session_id, user_node_id, assistant_node_id, model, api_key, web_search)
-    )
-    _jobs[assistant_node_id] = task
-    task.add_done_callback(lambda _: _jobs.pop(assistant_node_id, None))
+    """Fill in the card's response in the background with the user's key. Returns immediately."""
+    task = asyncio.create_task(_generate(session_id, node_id, model, api_key, web_search))
+    _jobs[node_id] = task
+    task.add_done_callback(lambda _: _jobs.pop(node_id, None))
     return task
 
 
@@ -71,23 +68,20 @@ def cancel_generation(node_ids: Iterable[UUID]) -> list[UUID]:
 
 async def _generate(
     session_id: UUID,
-    user_node_id: UUID,
-    assistant_node_id: UUID,
+    node_id: UUID,
     model: str,
     api_key: str,
     web_search: bool = False,
 ) -> None:
-    node = str(assistant_node_id)
+    node = str(node_id)
     async with _slots:  # wait for one of the MAX_CONCURRENT slots
         pool = get_pool()
         try:
             # Each query borrows a connection only briefly; none is held while
             # waiting on the provider.
-            await pool.execute(
-                "UPDATE nodes SET status = 'streaming' WHERE id = $1", assistant_node_id
-            )
+            await pool.execute("UPDATE nodes SET status = 'streaming' WHERE id = $1", node_id)
             events.start_reply(session_id, node)
-            messages = await assemble_context(pool, session_id, [user_node_id])
+            messages = await assemble_context(pool, session_id, [node_id])
             # A connected repo adds its map to the system prompt, after the
             # fixed part, and the tools to read it.
             system, toolbox = BASE_PROMPT, None
@@ -150,7 +144,7 @@ async def _generate(
                     "cache_read_tokens": usage.cache_read_tokens,
                     "cache_write_tokens": usage.cache_write_tokens,
                     "searches": usage.searches,
-                    "cost_usd": await record_usage(session_id, assistant_node_id, model, "reply", usage),
+                    "cost_usd": await record_usage(session_id, node_id, model, "reply", usage),
                 }
             await pool.execute(
                 # "- 'error'": during a --reload restart the new process's startup cleanup
@@ -158,14 +152,14 @@ async def _generate(
                 # finishing it. Finishing wins, so drop that stale reason.
                 """
                 UPDATE nodes
-                SET content = $2, status = 'complete', metadata = (metadata - 'error') || $3::jsonb
+                SET response = $2, status = 'complete', metadata = (metadata - 'error') || $3::jsonb
                 WHERE id = $1
                 """,
-                assistant_node_id, reply, metadata,
+                node_id, reply, metadata,
             )
             events.publish(session_id, "done", {
                 "node_id": node,
-                "content": reply,
+                "response": reply,
                 "thought_headings": metadata.get("thought_headings", []),
                 "thinking_seconds": metadata.get("thinking_seconds"),
                 "usage": metadata.get("usage"),
@@ -174,15 +168,15 @@ async def _generate(
             # The title is a second, small model call. It comes after "done" so the
             # finished reply doesn't look unfinished while it runs; it arrives on
             # its own "titled" event. Never raises.
-            await _write_title(session_id, assistant_node_id, reply, model, api_key)
+            await _write_title(session_id, node_id, reply, model, api_key)
         except Exception as e:
             if isinstance(e, ProviderError):
                 reason = str(e)
-                log.warning("generation failed for node %s: %s", assistant_node_id, e)
+                log.warning("generation failed for node %s: %s", node_id, e)
             else:
                 reason = "Something went wrong while generating this reply."
-                log.exception("generation crashed for node %s", assistant_node_id)
-            await _mark_error(session_id, assistant_node_id, reason)
+                log.exception("generation crashed for node %s", node_id)
+            await _mark_error(session_id, node_id, reason)
         finally:
             # Right after done/error is published (no await in between), or if the
             # job is cancelled. From here on the database has the final state.
@@ -227,16 +221,15 @@ async def _title_canvas(
         pool = get_pool()
         row = await pool.fetchrow(
             """
-            SELECT p.content, s.title FROM edges e
-            JOIN nodes p ON p.id = e.parent_id
-            JOIN sessions s ON s.id = p.session_id
-            WHERE e.child_id = $1 AND p.type = 'user'
+            SELECT n.prompt, s.title FROM nodes n
+            JOIN sessions s ON s.id = n.session_id
+            WHERE n.id = $1
             """,
             node_id,
         )
-        if row is None or row["title"] != title_from_prompt(row["content"]):
+        if row is None or row["title"] != title_from_prompt(row["prompt"]):
             return
-        prompt = row["content"]
+        prompt = row["prompt"]
         title, usage = await canvas_title_for(prompt, reply, model, api_key)
         if usage is not None:
             await record_usage(session_id, node_id, model, "title", usage)

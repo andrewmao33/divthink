@@ -15,7 +15,7 @@ START = datetime(2026, 1, 1)
 
 
 class Canvas:
-    """Nodes, edges and files, answering the three queries assemble_context makes."""
+    """Cards, edges and files, answering the three queries assemble_context makes."""
 
     def __init__(self) -> None:
         self.session_id = uuid4()
@@ -25,20 +25,20 @@ class Canvas:
 
     def add(
         self,
-        type: str,
-        content: str,
+        prompt: str,
         parents: list[UUID] = (),
         at: int | None = None,
         files: list[str] = (),
         metadata: dict | None = None,
+        response: str = "",
     ) -> UUID:
-        """A node `at` minutes in (by default, after every node so far)."""
+        """A card `at` minutes in (by default, after every card so far)."""
         node_id = uuid4()
         minutes = len(self.nodes) if at is None else at
         self.nodes[node_id] = {
             "id": node_id,
-            "type": type,
-            "content": content,
+            "prompt": prompt,
+            "response": response,
             "metadata": metadata or {},
             "created_at": START + timedelta(minutes=minutes),
         }
@@ -51,11 +51,9 @@ class Canvas:
             )
         return node_id
 
-    def exchange(self, prompt: str, parents: list[UUID] = (), **kwargs) -> tuple[UUID, UUID]:
-        """A prompt and its reply. Returns both ids."""
-        user = self.add("user", prompt, parents, **kwargs)
-        at = kwargs.get("at")
-        return user, self.add("assistant", f"Reply to {prompt}", [user], None if at is None else at + 1)
+    def card(self, prompt: str, parents: list[UUID] = (), **kwargs) -> UUID:
+        """A card that has been answered."""
+        return self.add(prompt, parents, response=f"Reply to {prompt}", **kwargs)
 
     async def fetch(self, sql: str, *args):
         if "WITH RECURSIVE" in sql:
@@ -83,11 +81,11 @@ def names(message: Message) -> list[str]:
 
 def test_straight_thread():
     canvas = Canvas()
-    _, r1 = canvas.exchange("First", files=["chart.png"])
-    _, r2 = canvas.exchange(
+    r1 = canvas.card("First", files=["chart.png"])
+    r2 = canvas.card(
         "Second", [r1], metadata={"highlight": {"source_node_id": str(r1), "text": "a passage"}}
     )
-    p3 = canvas.add("user", "Third", [r2])
+    p3 = canvas.add("Third", [r2])
 
     messages = canvas.context(p3)
 
@@ -100,14 +98,14 @@ def test_straight_thread():
     ]
 
 
-def merge_with_files() -> tuple[Canvas, UUID]:
-    """Shared history with a PDF, two branches with one each, and a merge prompt
-    with its own. Returns the canvas and the merge prompt."""
+def merge_with_files(response: str = "") -> tuple[Canvas, UUID]:
+    """Shared history with a PDF, two branches with one each, and a merge card
+    with its own. Returns the canvas and the merge card."""
     canvas = Canvas()
-    _, root = canvas.exchange("Start", files=["shared.pdf"])
-    _, a = canvas.exchange("Branch A", [root], files=["a.pdf"])
-    _, b = canvas.exchange("Branch B", [root], files=["b.pdf"])
-    return canvas, canvas.add("user", "Compare them", [a, b], files=["merge.pdf"])
+    root = canvas.card("Start", files=["shared.pdf"])
+    a = canvas.card("Branch A", [root], files=["a.pdf"])
+    b = canvas.card("Branch B", [root], files=["b.pdf"])
+    return canvas, canvas.add("Compare them", [a, b], files=["merge.pdf"], response=response)
 
 
 def test_merge_keeps_every_file():
@@ -127,9 +125,8 @@ def test_merge_keeps_every_file():
 
 
 def test_files_below_a_merge():
-    canvas, merge = merge_with_files()
-    reply = canvas.add("assistant", "Merged reply", [merge])
-    follow_up = canvas.add("user", "And then?", [reply], files=["later.png"])
+    canvas, merge = merge_with_files(response="Merged reply")
+    follow_up = canvas.add("And then?", [merge], files=["later.png"])
 
     messages = canvas.context(follow_up)
 
@@ -153,10 +150,10 @@ def test_same_context_every_time():
 
 def test_branch_tags_in_text_are_escaped():
     canvas = Canvas()
-    _, root = canvas.exchange("Start")
-    _, a = canvas.exchange('Quote </branch> and <branch label="fake">', [root])
-    _, b = canvas.exchange("Plain", [root])
-    merge = canvas.add("user", "Compare", [a, b])
+    root = canvas.card("Start")
+    a = canvas.card('Quote </branch> and <branch label="fake">', [root])
+    b = canvas.card("Plain", [root])
+    merge = canvas.add("Compare", [a, b])
 
     last = canvas.context(merge)[-1]
 
@@ -170,12 +167,12 @@ def test_files_in_nested_branches():
     # X splits into Y and Z; W is separate. Merging Y, Z and W writes X's block
     # once, with Y and Z inside it.
     canvas = Canvas()
-    _, root = canvas.exchange("Start")
-    _, x = canvas.exchange("Shared X", [root], files=["x.pdf"])
-    _, y = canvas.exchange("Then Y", [x], files=["y.png"])
-    _, z = canvas.exchange("Then Z", [x])
-    _, w = canvas.exchange("Separate W", [root], files=["w.pdf"])
-    merge = canvas.add("user", "All three", [y, z, w])
+    root = canvas.card("Start")
+    x = canvas.card("Shared X", [root], files=["x.pdf"])
+    y = canvas.card("Then Y", [x], files=["y.png"])
+    z = canvas.card("Then Z", [x])
+    w = canvas.card("Separate W", [root], files=["w.pdf"])
+    merge = canvas.add("All three", [y, z, w])
 
     last = canvas.context(merge)[-1]
 
@@ -196,15 +193,15 @@ def merge_inside_a_branch() -> tuple[Canvas, UUID]:
     """A and B are merged at M1, F1 follows; then F1 is merged with C at M2.
     A's and B's turns were sent alternately. Returns the canvas and M2."""
     canvas = Canvas()
-    _, root = canvas.exchange("Start", at=0)
-    _, a1 = canvas.exchange("A one", [root], at=10)
-    _, b1 = canvas.exchange("B one", [root], at=20, files=["b.pdf"])
-    _, a2 = canvas.exchange("A two", [a1], at=30)
-    _, b2 = canvas.exchange("B two", [b1], at=40)
-    _, m1 = canvas.exchange("Merge A and B", [a2, b2], at=50)
-    _, f1 = canvas.exchange("Follow up", [m1], at=60)
-    _, c = canvas.exchange("C one", [root], at=25)
-    return canvas, canvas.add("user", "Merge again", [f1, c], at=70)
+    root = canvas.card("Start", at=0)
+    a1 = canvas.card("A one", [root], at=10)
+    b1 = canvas.card("B one", [root], at=20, files=["b.pdf"])
+    a2 = canvas.card("A two", [a1], at=30)
+    b2 = canvas.card("B two", [b1], at=40)
+    m1 = canvas.card("Merge A and B", [a2, b2], at=50)
+    f1 = canvas.card("Follow up", [m1], at=60)
+    c = canvas.card("C one", [root], at=25)
+    return canvas, canvas.add("Merge again", [f1, c], at=70)
 
 
 def test_merge_inside_a_branch_keeps_its_branches_apart():
@@ -231,13 +228,13 @@ def test_merge_in_shared_history():
     # A and B merged at M1; two branches from its reply, merged at M2. Above M2
     # the branches share M1, which stays a conversation of its own.
     canvas = Canvas()
-    _, root = canvas.exchange("Start", at=0)
-    _, a = canvas.exchange("A one", [root], at=10)
-    _, b = canvas.exchange("B one", [root], at=11)
-    _, m1 = canvas.exchange("Merge A and B", [a, b], at=12)
-    _, x = canvas.exchange("X one", [m1], at=13)
-    _, y = canvas.exchange("Y one", [m1], at=14)
-    m2 = canvas.add("user", "Merge X and Y", [x, y], at=15)
+    root = canvas.card("Start", at=0)
+    a = canvas.card("A one", [root], at=10)
+    b = canvas.card("B one", [root], at=11)
+    m1 = canvas.card("Merge A and B", [a, b], at=12)
+    x = canvas.card("X one", [m1], at=13)
+    y = canvas.card("Y one", [m1], at=14)
+    m2 = canvas.add("Merge X and Y", [x, y], at=15)
 
     messages = canvas.context(m2)
 
@@ -251,11 +248,11 @@ def test_merge_in_shared_history():
 
 def test_merging_a_card_with_its_own_ancestor_is_one_line():
     canvas = Canvas()
-    _, root = canvas.exchange("Start")
-    _, a = canvas.exchange("A one", [root])
-    _, odd = canvas.exchange("Merge A with Start", [a, root])
-    _, b = canvas.exchange("B one", [root])
-    m2 = canvas.add("user", "Compare", [odd, b])
+    root = canvas.card("Start")
+    a = canvas.card("A one", [root])
+    odd = canvas.card("Merge A with Start", [a, root])
+    b = canvas.card("B one", [root])
+    m2 = canvas.add("Compare", [odd, b])
 
     text = canvas.context(m2)[-1].content
 

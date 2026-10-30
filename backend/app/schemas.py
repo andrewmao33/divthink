@@ -7,8 +7,8 @@ from pydantic import BaseModel
 
 class Node(BaseModel):
     id: UUID
-    type: str
-    content: str
+    prompt: str
+    response: str
     model: str | None
     position_x: float
     position_y: float
@@ -23,4 +23,4 @@ class Edge(BaseModel):
     child_id: UUID
 
 
-NODE_COLUMNS = "id, type, content, model, position_x, position_y, status, metadata, created_at"
+NODE_COLUMNS = "id, prompt, response, model, position_x, position_y, status, metadata, created_at"

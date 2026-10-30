@@ -35,12 +35,13 @@ CREATE TABLE sessions (
 -- Session list: a user's sessions, most recently updated first.
 CREATE INDEX sessions_user_updated_idx ON sessions (user_id, updated_at DESC);
 
+-- One card: a prompt and the model's response to it.
 CREATE TABLE nodes (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id uuid NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
-  type       text NOT NULL CHECK (type IN ('user', 'assistant', 'highlight')),
-  content    text NOT NULL DEFAULT '',
-  model      text,  -- assistant nodes only
+  prompt     text NOT NULL DEFAULT '',
+  response   text NOT NULL DEFAULT '',
+  model      text,
   position_x double precision NOT NULL DEFAULT 0,
   position_y double precision NOT NULL DEFAULT 0,
   status     text NOT NULL CHECK (status IN ('pending', 'streaming', 'complete', 'error')),

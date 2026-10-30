@@ -99,7 +99,7 @@ async def delete_nodes(session_id: UUID, body: DeleteNodesRequest, user_id: UUID
 async def set_title(
     session_id: UUID, node_id: UUID, body: TitleRequest, user_id: UUID = Depends(current_user)
 ):
-    """Rename a box. An empty title clears it, falling back to the generated one
+    """Rename a card. An empty title clears it, falling back to the generated one
     being gone entirely rather than storing a blank."""
     title = " ".join(body.title.split())
     async with get_pool().acquire() as conn:
@@ -152,7 +152,7 @@ async def get_attachment(
 
 @router.patch("/{session_id}/positions", status_code=204)
 async def save_positions(session_id: UUID, body: SavePositionsRequest, user_id: UUID = Depends(current_user)):
-    """Save where boxes were dragged. Ids no longer on the canvas are ignored."""
+    """Save where cards were dragged. Ids no longer on the canvas are ignored."""
     async with get_pool().acquire() as conn:
         exists = await conn.fetchval(
             "SELECT 1 FROM sessions WHERE id = $1 AND user_id = $2", session_id, user_id

@@ -24,7 +24,7 @@ WITH RECURSIVE ancestors AS (
   FROM edges e
   JOIN ancestors a ON e.child_id = a.id
 )
-SELECT id, type, content, metadata, created_at
+SELECT id, prompt, response, metadata, created_at
 FROM nodes
 WHERE id IN (SELECT id FROM ancestors)
   AND session_id = $2  -- guard against crossing sessions
@@ -37,7 +37,10 @@ async def assemble_context(
     """The conversation for `node_ids`: those nodes plus all their ancestors,
     oldest first, as alternating user/assistant messages.
 
-    A prompt with several parents is a merge, and gets a different shape: the
+    Each card is a prompt and its response: two messages. The card being
+    answered has no response yet, so the conversation ends on its prompt.
+
+    A card with several parents is a merge, and gets a different shape: the
     history the branches share, then each branch on its own, then the prompt.
     Everything that continues from a merge keeps that shape and adds its own
     turns after it. Nothing above a merge can change once it exists, so the
@@ -138,7 +141,8 @@ def _merged(
     target_id: UUID | None,
 ) -> list[Message]:
     """Shared history as a normal conversation, then one <branch> block per branch,
-    then the merge prompt (none for lines that meet only further down).
+    then the merge prompt and its response, if it has one yet (neither for lines
+    that meet only further down).
     prompt.py tells the model what those blocks are.
 
     The blocks are text, so the files sent in the branches travel with the final
@@ -164,9 +168,12 @@ def _merged(
         quote = _highlight_of(target)
         if quote:
             tail.append(quote)
-        tail.append(target["content"].strip())
+        tail.append(target["prompt"].strip())
         files += target["attachments"]
     _append(messages, "user", "\n\n".join(part for part in tail if part), files)
+    response = nodes[target_id]["response"].strip() if target_id is not None else ""
+    if response:
+        _append(messages, "assistant", response)
     return messages
 
 
@@ -366,9 +373,8 @@ def _label(turns: list[Message], number: int) -> str:
 def _oldest_first(nodes: dict, edges: list) -> list:
     """Order by created_at, but never put a node before its parents.
 
-    Nodes saved by the same /generate call share a created_at (Postgres now() is
-    the transaction start), so time alone can't tell a highlight from the
-    prompt below it. Parents-first breaks those ties correctly.
+    Two cards can share a created_at, so time alone can't always tell a card
+    from the one below it. Parents-first breaks those ties correctly.
 
     Edges reaching outside `nodes` are ignored: this is called with subsets of the
     graph, and a node waiting on a parent that isn't there would never be emitted.
@@ -403,10 +409,7 @@ def _as_quote(text: str) -> str:
 
 def _highlight_of(node) -> str | None:
     """The passage the user highlighted before writing this prompt, as a quote.
-
-    Kept on the prompt node's metadata. Highlights used to be nodes of their own;
-    those still exist on older canvases and are handled separately.
-    """
+    Kept on the card's metadata."""
     highlight = (node["metadata"] or {}).get("highlight")
     if not isinstance(highlight, dict):
         return None
@@ -426,27 +429,19 @@ def _append(
 
 
 def _to_messages(ordered: list) -> list[Message]:
+    """Each card as its prompt (with any quote and files), then its response."""
     messages: list[Message] = []
-    quotes: list[str] = []  # highlights waiting to be attached to the next prompt
-
     for node in ordered:
-        text = node["content"].strip()
-        if not text:
-            continue
-        if node["type"] == "highlight":  # older canvases: the quote was a node of its own
-            quotes.append(_as_quote(text))
-        elif node["type"] == "user":
-            quoted = _highlight_of(node)  # the quote now rides on the prompt itself
+        prompt = node["prompt"].strip()
+        if prompt:
+            quoted = _highlight_of(node)
             _append(
                 messages,
                 "user",
-                "\n\n".join(quotes + ([quoted] if quoted else []) + [text]),
+                "\n\n".join(([quoted] if quoted else []) + [prompt]),
                 node.get("attachments"),
             )
-            quotes = []
-        else:
-            _append(messages, "assistant", text)
-
-    if quotes:  # a highlight with no prompt after it still counts as user input
-        _append(messages, "user", "\n\n".join(quotes))
+        response = node["response"].strip()
+        if response:
+            _append(messages, "assistant", response)
     return messages

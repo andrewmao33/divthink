@@ -18,8 +18,7 @@ log = logging.getLogger(__name__)
 async def insert_node(
     conn: asyncpg.Connection,
     session_id: UUID,
-    type: str,
-    content: str,
+    prompt: str,
     status: str,
     x: float,
     y: float,
@@ -27,14 +26,14 @@ async def insert_node(
     metadata: dict | None = None,
     id: UUID | None = None,
 ) -> UUID:
-    # `id` is chosen by the browser when it draws the node before saving it.
+    # `id` is chosen by the browser when it draws the card before saving it.
     return await conn.fetchval(
         """
-        INSERT INTO nodes (id, session_id, type, content, model, position_x, position_y, status, metadata)
-        VALUES (COALESCE($9, gen_random_uuid()), $1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO nodes (id, session_id, prompt, model, position_x, position_y, status, metadata)
+        VALUES (COALESCE($8, gen_random_uuid()), $1, $2, $3, $4, $5, $6, $7)
         RETURNING id
         """,
-        session_id, type, content, model, x, y, status, metadata or {}, id,
+        session_id, prompt, model, x, y, status, metadata or {}, id,
     )
 
 
