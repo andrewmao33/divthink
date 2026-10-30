@@ -38,7 +38,6 @@ function Panel({ width, onResize, collapsed, onCollapse }: Props) {
     previousActiveId,
     mergeIds,
     demoEchoes,
-    readOnly,
     setActive,
     startNewThread,
     toggleMerge,
@@ -50,7 +49,6 @@ function Panel({ width, onResize, collapsed, onCollapse }: Props) {
       previousActiveId: s.previousActiveId,
       mergeIds: s.mergeIds,
       demoEchoes: s.demoEchoes,
-      readOnly: s.readOnly,
       setActive: s.setActive,
       startNewThread: s.startNewThread,
       toggleMerge: s.toggleMerge,
@@ -158,16 +156,14 @@ function Panel({ width, onResize, collapsed, onCollapse }: Props) {
             </span>
           )}
         </button>
-        {!readOnly && (
-          <button
-            type="button"
-            className={styles.newThread}
-            onClick={() => startNewThread()}
-            disabled={!active && !merging}
-          >
-            + New thread
-          </button>
-        )}
+        <button
+          type="button"
+          className={styles.newThread}
+          onClick={() => startNewThread()}
+          disabled={!active && !merging}
+        >
+          + New thread
+        </button>
       </header>
 
       {leavesOpen && (
@@ -273,13 +269,7 @@ function Panel({ width, onResize, collapsed, onCollapse }: Props) {
         )}
       </div>
 
-      {readOnly ? (
-        <p className={styles.readOnly}>
-          A canvas you can read, pan and zoom. <a href="/">Sign in</a> to make your own.
-        </p>
-      ) : (
-        <Composer active={active} merging={merging ? sources : null} />
-      )}
+      <Composer active={active} merging={merging ? sources : null} />
 
       <div
         className={styles.resize}

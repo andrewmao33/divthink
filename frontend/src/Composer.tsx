@@ -40,7 +40,6 @@ function Composer({ active, merging }: Props) {
     addImages,
     removeImage,
     repo,
-    readOnly,
   } = useCanvasStore(
     useShallow((s) => ({
       demo: s.demo,
@@ -64,7 +63,6 @@ function Composer({ active, merging }: Props) {
       addImages: s.addImages,
       removeImage: s.removeImage,
       repo: s.session?.repo ?? null,
-      readOnly: s.readOnly,
     })),
   )
   const [text, setText] = useState('')
@@ -300,7 +298,7 @@ function Composer({ active, merging }: Props) {
             <path d="M9.5 4 5 8.5a2.1 2.1 0 0 0 3 3l4.5-4.5a3.5 3.5 0 0 0-5-5L3 6.5a5 5 0 0 0 7 7L13.5 10" />
           </svg>
         </button>
-        {!demo && !readOnly && (
+        {!demo && (
           <button
             type="button"
             className={`${styles.attach} ${repo ? styles.repoOn : ''}`}

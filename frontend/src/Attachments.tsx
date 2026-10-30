@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { attachmentUrl, authHeaders, publicAttachmentUrl } from './api'
+import { attachmentUrl, authHeaders } from './api'
 import { pdfPreview } from './pdfPreview'
-import { useCanvasStore } from './store'
 import styles from './Attachments.module.css'
 
 export type NodeAttachment = { id: string; media_type: string; filename: string }
@@ -18,14 +17,12 @@ type Loaded = {
 // an attachment never changes, and a visit only sees so many.
 const loaded = new Map<string, Promise<Loaded | null>>()
 
-function load(sessionId: string, file: NodeAttachment, readOnly: boolean): Promise<Loaded | null> {
+function load(sessionId: string, file: NodeAttachment): Promise<Loaded | null> {
   let entry = loaded.get(file.id)
   if (!entry) {
     entry = (async () => {
       try {
-        const headers = readOnly ? {} : await authHeaders()
-        const src = readOnly ? publicAttachmentUrl(sessionId, file.id) : attachmentUrl(sessionId, file.id)
-        const res = await fetch(src, { headers })
+        const res = await fetch(attachmentUrl(sessionId, file.id), { headers: await authHeaders() })
         if (!res.ok) return null
         const blob = await res.blob()
         const url = URL.createObjectURL(blob)
@@ -43,13 +40,12 @@ function load(sessionId: string, file: NodeAttachment, readOnly: boolean): Promi
 }
 
 function useLoaded(sessionId: string, files: NodeAttachment[]): Record<string, Loaded> {
-  const readOnly = useCanvasStore((s) => s.readOnly)
   const [done, setDone] = useState<Record<string, Loaded>>({})
 
   useEffect(() => {
     let cancelled = false
     for (const file of files) {
-      void load(sessionId, file, readOnly).then((result) => {
+      void load(sessionId, file).then((result) => {
         if (result && !cancelled) setDone((current) => ({ ...current, [file.id]: result }))
       })
     }
@@ -57,7 +53,7 @@ function useLoaded(sessionId: string, files: NodeAttachment[]): Record<string, L
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, readOnly, files.map((f) => f.id).join()])
+  }, [sessionId, files.map((f) => f.id).join()])
 
   return done
 }

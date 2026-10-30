@@ -54,14 +54,12 @@ type Menu = { x: number; y: number; items: MenuItem[] }
 type Sizes = Record<string, Size>
 
 type Props = {
-  // A public canvas to show read-only, with no sign-in (?demo=<id>).
-  demoId?: string
   // Set inside the landing page: shows the built-in example in whatever box it
   // is given, with no bar or drawer, and leaves scrolling to the page.
   embedded?: boolean
 }
 
-function Canvas({ demoId, embedded = false }: Props) {
+function Canvas({ embedded = false }: Props) {
   const {
     status,
     error,
@@ -84,9 +82,7 @@ function Canvas({ demoId, embedded = false }: Props) {
     startBranch,
     startNewThread,
     newThreadAt,
-    readOnly,
     unsaved,
-    loadPublicSession,
     loadDemo,
   } = useCanvasStore(
     useShallow((s) => ({
@@ -112,8 +108,6 @@ function Canvas({ demoId, embedded = false }: Props) {
       startBranch: s.startBranch,
       startNewThread: s.startNewThread,
       newThreadAt: s.newThreadAt,
-      readOnly: s.readOnly,
-      loadPublicSession: s.loadPublicSession,
       loadDemo: s.loadDemo,
     })),
   )
@@ -145,10 +139,6 @@ function Canvas({ demoId, embedded = false }: Props) {
       loadDemo()
       return
     }
-    if (demoId) {
-      void loadPublicSession(demoId)
-      return
-    }
     void loadSession(canvasIdInAddress())
     void loadModels()
     // Back from Stripe's checkout or portal: once, not again on coming back
@@ -157,14 +147,14 @@ function Canvas({ demoId, embedded = false }: Props) {
       billingShown = true
       useCanvasStore.getState().openSettings('billing')
     }
-  }, [embedded, demoId, loadPublicSession, loadSession, loadModels, loadDemo])
+  }, [embedded, loadSession, loadModels, loadDemo])
 
   // Keep the open canvas in the URL, so refreshing reopens it. A new canvas
   // has no address of its own until its first prompt saves it.
   useEffect(() => {
-    if (!session || readOnly || embedded) return
+    if (!session || embedded) return
     window.history.replaceState(null, '', unsaved ? '/' : `${CANVAS_PATH}${session.id}`)
-  }, [session, unsaved, readOnly, embedded])
+  }, [session, unsaved, embedded])
 
   // Escape backs out of a delete waiting to be confirmed, then of a merge being
   // drafted. Ignored while typing: the composer handles its own Escape.
@@ -324,16 +314,14 @@ function Canvas({ demoId, embedded = false }: Props) {
           },
         },
       ]
-      if (!readOnly) {
-        items.unshift({
-          label: 'Branch',
-          onClick: () => {
-            startBranch(quote.nodeId, quote.text)
-            window.getSelection()?.removeAllRanges()
-            closeMenu()
-          },
-        })
-      }
+      items.unshift({
+        label: 'Branch',
+        onClick: () => {
+          startBranch(quote.nodeId, quote.text)
+          window.getSelection()?.removeAllRanges()
+          closeMenu()
+        },
+      })
       setMenu({ x: e.clientX, y: e.clientY, items })
       return
     }
@@ -343,7 +331,7 @@ function Canvas({ demoId, embedded = false }: Props) {
     if (!exchange) {
       // Empty canvas: start a thread whose first card goes right here.
       const onPane = e.target instanceof Element && e.target.closest('.react-flow__pane')
-      if (!onPane || readOnly || embedded || !flow.current) return
+      if (!onPane || embedded || !flow.current) return
       e.preventDefault()
       const at = flow.current.screenToFlowPosition({ x: e.clientX, y: e.clientY })
       setMenu({
@@ -361,16 +349,15 @@ function Canvas({ demoId, embedded = false }: Props) {
       })
       return
     }
-    const items: MenuItem[] = []
-    if (!readOnly) {
-      items.push({
+    const items: MenuItem[] = [
+      {
         label: mergeIds.includes(exchange.id) ? 'Remove from merge' : 'Merge with…',
         onClick: () => {
           toggleMerge(exchange.id)
           closeMenu()
         },
-      })
-    }
+      },
+    ]
     if (exchange.layout) {
       items.push({
         label: 'Reset position and size',
@@ -382,7 +369,7 @@ function Canvas({ demoId, embedded = false }: Props) {
     }
     // Only a card nothing continues from can go: deleting one in the middle
     // would take everything below it too.
-    if (!readOnly && exchange.children.length === 0) {
+    if (exchange.children.length === 0) {
       items.push({
         label: 'Delete',
         danger: true,
@@ -397,17 +384,17 @@ function Canvas({ demoId, embedded = false }: Props) {
     setMenu({ x: e.clientX, y: e.clientY, items })
   }
 
-  // Without the app's own frame: the public canvas and the landing page's demo.
-  const bare = readOnly || embedded
+  // Without the app's own frame: the landing page's demo.
+  const bare = embedded
 
   if (status !== 'ready') {
     const loading = (
       <div className={styles.canvas}>
         <p className={styles.notice}>{status === 'error' ? error : 'Loading…'}</p>
-        {!demoId && !embedded && <Settings />}
+        {!embedded && <Settings />}
       </div>
     )
-    return demoId || embedded ? loading : <Sidebar>{loading}</Sidebar>
+    return embedded ? loading : <Sidebar>{loading}</Sidebar>
   }
 
   const canvas = (
@@ -415,9 +402,6 @@ function Canvas({ demoId, embedded = false }: Props) {
       className={styles.canvas}
       style={
         {
-          // The public canvas has no bar in the corner to leave room for, so
-          // its panel starts at the top.
-          ...(readOnly && { '--panel-top': '12px' }),
           ...(embedded && { '--chrome-zoom': scale }),
         } as CSSProperties
       }

@@ -10,9 +10,6 @@ import Terms from './Terms'
 import SignIn from './SignIn'
 import { resetCanvas } from './store'
 
-// A public canvas, readable with no account: divthink.com/?demo=<session id>
-const demoId = new URLSearchParams(window.location.search).get('demo')
-
 function App() {
   // undefined: still checking for an existing sign-in.
   const [session, setSession] = useState<Session | null | undefined>(authEnabled ? undefined : null)
@@ -33,7 +30,7 @@ function App() {
   const [routedFor, setRoutedFor] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!userId || demoId) return
+    if (!userId) return
     let cancelled = false
     void firstStop(userId).then((stop) => {
       if (cancelled || stop === 'checkout') return // leaving for Stripe
@@ -59,7 +56,6 @@ function App() {
   // Google's sign-in consent screen may still link to.
   if (path === '/privacy' || path === '/privacy.html') return <Privacy />
   if (path === '/terms') return <Terms />
-  if (demoId) return <Canvas demoId={demoId} /> // public canvas, no sign-in
   // Local development without sign-in.
   if (!authEnabled) return path === '/plans' ? <Plans userId="dev" /> : <Canvas />
   if (session === undefined) return null

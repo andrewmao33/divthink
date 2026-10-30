@@ -128,24 +128,6 @@ export function getSession(id: string): Promise<SessionGraph> {
   return request(`/sessions/${encodeURIComponent(id)}`)
 }
 
-// The one canvas readable without an account. No auth header: these routes are
-// open by design, and only serve sessions flagged is_public.
-export function getPublicSession(id: string): Promise<SessionGraph> {
-  // In development the demo canvas is rebuilt constantly and the response is
-  // cacheable, so a stale copy would hide every change. The parameter makes each
-  // load a different URL; production keeps the cache, which is the point of it.
-  const bust = import.meta.env.DEV ? `?t=${Date.now()}` : ''
-  return request(`/public/sessions/${encodeURIComponent(id)}${bust}`, {
-    cache: import.meta.env.DEV ? 'no-store' : 'default',
-  })
-}
-
-export function publicAttachmentUrl(sessionId: string, attachmentId: string): string {
-  return apiUrl(
-    `/public/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(attachmentId)}`,
-  )
-}
-
 export type GenerateRequest = {
   prompt: string
   parent_ids?: string[]

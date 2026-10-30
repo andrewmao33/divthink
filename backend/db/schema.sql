@@ -25,9 +25,6 @@ CREATE TABLE sessions (
   user_id       uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   title         text NOT NULL DEFAULT '',
   default_model text,
-  -- Readable by anyone, through /public/sessions/{id}: the demo canvas on the
-  -- landing page. Off unless set by hand.
-  is_public     boolean NOT NULL DEFAULT false,
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()  -- set by the app on change
 );

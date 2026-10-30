@@ -4,7 +4,7 @@
   zoom: var(--chrome-zoom, 1); /* drawn smaller in the landing page's demo */
   border-radius: var(--radius);
   position: absolute;
-  top: var(--panel-top, 64px); /* below the bar in the corner (Sidebar.module.css) */
+  top: 64px; /* below the bar in the corner (Sidebar.module.css) */
   bottom: var(--space-3);
   left: var(--space-3);
   z-index: 10;
@@ -358,20 +358,6 @@
 }
 
 .back:hover {
-  color: var(--color-accent);
-}
-
-/* The public canvas: in place of the composer. */
-.readOnly {
-  flex: none;
-  margin: 0;
-  padding: var(--space-4);
-  border-top: 1px solid var(--color-border);
-  font-size: var(--text-sm);
-  color: var(--color-text-soft);
-}
-
-.readOnly a {
   color: var(--color-accent);
 }
 

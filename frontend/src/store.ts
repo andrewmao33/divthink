@@ -8,7 +8,6 @@ import {
   deleteSession,
   deleteNodes,
   generate,
-  getPublicSession,
   getSession,
   listModels,
   renameSession,
@@ -78,11 +77,9 @@ type CanvasState = {
   limitNotice: string | null
   pendingDelete: PendingDelete | null
   // The public demo: everything that writes is refused, and there is no stream.
-  readOnly: boolean
   // A new canvas that hasn't been saved yet: it is created on the server when
   // the first prompt is sent, so opening one and leaving makes nothing.
   unsaved: boolean
-  loadPublicSession: (id: string) => Promise<void>
   // The example on the landing page: everything works, but only in this
   // browser. Nothing is sent to the server, and a prompt gets a fixed reply.
   demo: boolean
@@ -174,7 +171,6 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   notice: null,
   limitNotice: null,
   pendingDelete: null,
-  readOnly: false,
   unsaved: false,
   demo: false,
   demoEchoes: [],
@@ -188,8 +184,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       status: 'ready',
       error: null,
       connection: 'live',
-      readOnly: false,
-      unsaved: false,
+          unsaved: false,
       demo: true,
       demoEchoes: [],
       activeId: DEMO_ACTIVE,
@@ -204,27 +199,6 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
 
   openSettings: (section = 'general') => set({ settings: section }),
   closeSettings: () => set({ settings: null }),
-
-  loadPublicSession: async (id) => {
-    set({ status: 'loading', error: null, nodes: [], edges: [], readOnly: true })
-    try {
-      const graph = await getPublicSession(id)
-      const { nodes: _nodes, edges: _edges, ...session } = graph
-      // readOnly again: signing out resets the store, and on a first visit that
-      // can land between the line above and this one.
-      set((s) => ({
-        ...fromServer(graph, s.nodes),
-        session,
-        status: 'ready',
-        connection: 'live',
-        readOnly: true,
-        unsaved: false,
-      }))
-      openLatest()
-    } catch {
-      set({ status: 'error', error: "That canvas isn't available." })
-    }
-  },
 
   loadSession: async (id) => {
     // React StrictMode runs effects twice in development; load only once.
@@ -311,7 +285,6 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
 
   toggleMerge: (id) =>
     set((s) => {
-      if (s.readOnly) return s
       const picked = s.mergeIds.includes(id)
         ? s.mergeIds.filter((other) => other !== id)
         : s.mergeIds.length === 0 && s.activeId && s.activeId !== id
@@ -323,9 +296,9 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   clearMerge: () => set({ mergeIds: [] }),
 
   sendPrompt: async (prompt) => {
-    const { session, sending, nodes, edges, activeId, mergeIds, highlight, model, images, readOnly } =
+    const { session, sending, nodes, edges, activeId, mergeIds, highlight, model, images } =
       get()
-    if (!session || sending || readOnly) return false
+    if (!session || sending) return false
     // The new card hangs from the active card, or from every card picked to merge.
     const { byId } = exchangesOf(nodes, edges)
     const from = mergeIds.length > 0 ? mergeIds : activeId ? [activeId] : []
@@ -450,9 +423,9 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   },
 
   requestDelete: (id) => {
-    const { nodes, edges, pendingDelete, readOnly } = get()
+    const { nodes, edges, pendingDelete } = get()
     const exchange = exchangesOf(nodes, edges).byId.get(id)
-    if (!exchange || exchange.children.length > 0 || pendingDelete || readOnly) return
+    if (!exchange || exchange.children.length > 0 || pendingDelete) return
     set({ pendingDelete: { nodeIds: [exchange.id], label: labelOf(exchange) }, notice: null })
   },
 
@@ -468,7 +441,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   placeCard: (id, layout) => get().placeCards([{ id, layout }]),
 
   placeCards: (cards) => {
-    const { session, readOnly } = get()
+    const { session } = get()
     if (cards.length === 0) return
     const placed = new Map(cards.map((card) => [card.id, card.layout]))
     // Applied here first, so a card doesn't jump back while the save is on its way.
@@ -481,15 +454,14 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
         return { ...box, data: { ...box.data, node } }
       }),
     }))
-    // The public canvas and the demo can be rearranged, just not saved.
-    if (!session || readOnly || get().demo || get().unsaved) return
+    // The demo can be rearranged, just not saved.
+    if (!session || get().demo || get().unsaved) return
     saveLayout(session.id, cards).catch(() =>
       set({ notice: "Couldn't save where that card was put. It'll move back on refresh." }),
     )
   },
 
   deleteCanvas: async (id) => {
-    if (get().readOnly) return false
     try {
       await deleteSession(id)
     } catch (e) {
@@ -518,9 +490,9 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   },
 
   renameCanvas: (title) => {
-    const { session, readOnly, unsaved } = get()
+    const { session, unsaved } = get()
     const next = title.split(/\s+/).join(' ').trim()
-    if (!session || readOnly || unsaved || next === session.title) return
+    if (!session || unsaved || next === session.title) return
     set({ session: { ...session, title: next } })
     renameSession(session.id, next).catch(() => set({ notice: "Couldn't rename the canvas." }))
   },
@@ -572,8 +544,8 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
     }),
 
   connectRepo: async (url) => {
-    const { session, readOnly, demo } = get()
-    if (!session || readOnly || demo) return null
+    const { session, demo } = get()
+    if (!session || demo) return null
     try {
       let sessionId = session.id
       if (get().unsaved) {
@@ -592,8 +564,8 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   },
 
   disconnectRepo: () => {
-    const { session, readOnly, demo } = get()
-    if (!session?.repo || readOnly || demo) return
+    const { session, demo } = get()
+    if (!session?.repo || demo) return
     const repo = session.repo
     set({ session: { ...session, repo: null } })
     deleteRepo(session.id).catch(() =>
@@ -689,8 +661,7 @@ export function resetCanvas() {
     sending: false,
     notice: null,
     pendingDelete: null,
-    readOnly: false,
-    unsaved: false,
+      unsaved: false,
     demo: false,
     demoEchoes: [],
     settings: null,
