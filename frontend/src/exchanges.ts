@@ -1,95 +1,50 @@
-// The canvas as the user sees it: one card per exchange, a prompt and its reply.
-// The server stores those as two nodes joined by an edge; this folds each pair
-// into one. No React here, so it can be tested directly.
+// The canvas as the user sees it: one card per exchange, a prompt and its
+// response, each a single node on the server. This adds what the components
+// need on top: the lines between cards, the quote, the layout. No React here,
+// so it can be tested directly.
 import type { Edge } from '@xyflow/react'
 import type { ApiNode, CardLayout } from './api'
 import type { NodeAttachment } from './Attachments'
 import type { BoxNode, LiveReply } from './graph'
 
 export type Exchange = {
-  id: string // the prompt's node id (the reply's, on the rare card with no prompt)
-  prompt: ApiNode | null
-  reply: ApiNode | null
-  live?: LiveReply // the reply's streaming state, while it is being written
+  id: string
+  node: ApiNode
+  live?: LiveReply // the response's streaming state, while it is being written
   quote: string | null // the passage this prompt branched from
   layout: CardLayout | null // set once the card is moved or resized by hand
-  parents: string[] // exchange ids, oldest first; more than one is a merge
-  children: string[] // exchange ids, oldest first
+  parents: string[] // ids, oldest first; more than one is a merge
+  children: string[] // ids, oldest first
   createdAt: string
 }
 
 export type Exchanges = {
   list: Exchange[] // oldest first
   byId: Map<string, Exchange>
-  // Which exchange a server node belongs to, for either of its two nodes.
-  ownerOf: Map<string, string>
 }
 
 const LABEL_MAX = 48
 
 export function buildExchanges(boxes: BoxNode[], edges: Edge[]): Exchanges {
-  const nodes = new Map(boxes.map((box) => [box.id, box.data.node]))
-  const live = new Map(boxes.map((box) => [box.id, box.data.live]))
-  const parentsOf = new Map<string, string[]>()
-  const childrenOf = new Map<string, string[]>()
-  for (const edge of edges) {
-    if (!nodes.has(edge.source) || !nodes.has(edge.target)) continue
-    parentsOf.set(edge.target, [...(parentsOf.get(edge.target) ?? []), edge.source])
-    childrenOf.set(edge.source, [...(childrenOf.get(edge.source) ?? []), edge.target])
-  }
-  const typeOf = (id: string) => nodes.get(id)?.type
-
-  // A reply belongs to the prompt above it. A reply with no prompt above it is a
-  // card of its own. Quote nodes (older canvases only) belong to nothing: they
-  // are folded into the prompt below them.
-  const ownerOf = new Map<string, string>()
-  for (const node of nodes.values()) {
-    if (node.type === 'user') {
-      ownerOf.set(node.id, node.id)
-    } else if (node.type === 'assistant') {
-      const prompt = (parentsOf.get(node.id) ?? []).find((id) => typeOf(id) === 'user')
-      ownerOf.set(node.id, prompt ?? node.id)
-    }
-  }
-
   const byId = new Map<string, Exchange>()
-  for (const node of nodes.values()) {
-    if (ownerOf.get(node.id) !== node.id) continue
-    const isPrompt = node.type === 'user'
-    const replyId = isPrompt
-      ? (childrenOf.get(node.id) ?? []).find((id) => typeOf(id) === 'assistant')
-      : node.id
-    const reply = replyId ? (nodes.get(replyId) ?? null) : null
-
-    // Walk up to the cards this one continues from, through any quote node.
-    const parents = new Set<string>()
-    let quote = isPrompt ? quoteOn(node) : null
-    const above = [...(parentsOf.get(node.id) ?? [])]
-    const seen = new Set<string>()
-    while (above.length > 0) {
-      const id = above.pop()!
-      if (seen.has(id)) continue
-      seen.add(id)
-      const owner = ownerOf.get(id)
-      if (owner) {
-        if (owner !== node.id) parents.add(owner)
-      } else {
-        quote ??= nodes.get(id)?.content.trim() || null
-        above.push(...(parentsOf.get(id) ?? []))
-      }
-    }
-
+  for (const box of boxes) {
+    const node = box.data.node
     byId.set(node.id, {
       id: node.id,
-      prompt: isPrompt ? node : null,
-      reply,
-      live: replyId ? live.get(replyId) : undefined,
-      quote,
+      node,
+      live: box.data.live,
+      quote: quoteOn(node),
       layout: layoutOn(node),
-      parents: [...parents],
+      parents: [],
       children: [],
       createdAt: node.created_at,
     })
+  }
+  for (const edge of edges) {
+    const [parent, child] = [byId.get(edge.source), byId.get(edge.target)]
+    if (!parent || !child || child.parents.includes(parent.id)) continue
+    child.parents.push(parent.id)
+    parent.children.push(child.id)
   }
 
   const oldestFirst = (a: string, b: string) => {
@@ -97,13 +52,12 @@ export function buildExchanges(boxes: BoxNode[], edges: Edge[]): Exchanges {
     return x.createdAt.localeCompare(y.createdAt) || x.id.localeCompare(y.id)
   }
   for (const exchange of byId.values()) {
-    exchange.parents = exchange.parents.filter((id) => byId.has(id)).sort(oldestFirst)
-    for (const parent of exchange.parents) byId.get(parent)!.children.push(exchange.id)
+    exchange.parents.sort(oldestFirst)
+    exchange.children.sort(oldestFirst)
   }
-  for (const exchange of byId.values()) exchange.children.sort(oldestFirst)
 
   const list = [...byId.keys()].sort(oldestFirst).map((id) => byId.get(id)!)
-  return { list, byId, ownerOf }
+  return { list, byId }
 }
 
 // The store hands out the same arrays until something changes, so remembering
@@ -185,8 +139,7 @@ export function leavesOf(list: Exchange[]): Exchange[] {
 
 // A card's name wherever there is only room for a line: its prompt, shortened.
 export function labelOf(exchange: Exchange): string {
-  const title = exchange.reply?.metadata.title
-  const text = (exchange.prompt?.content ?? (typeof title === 'string' ? title : '')).trim()
+  const text = exchange.node.prompt.trim()
   const oneLine = text.split(/\s+/).join(' ')
   if (!oneLine) return 'Untitled'
   return oneLine.length > LABEL_MAX ? oneLine.slice(0, LABEL_MAX - 1).trimEnd() + '…' : oneLine

@@ -14,13 +14,13 @@ export async function authHeaders(): Promise<Record<string, string>> {
   return token ? { authorization: `Bearer ${token}` } : {}
 }
 
-export type NodeType = 'user' | 'assistant' | 'highlight'
 export type NodeStatus = 'pending' | 'streaming' | 'complete' | 'error'
 
+// One card: a prompt and the model's response to it.
 export type ApiNode = {
   id: string
-  type: NodeType
-  content: string
+  prompt: string
+  response: string
   model: string | null
   position_x: number
   position_y: number
@@ -159,16 +159,14 @@ export type GenerateRequest = {
   // its text, and only the browser knows that, so without this the server would
   // have to guess and would drop new boxes on top of long replies.
   parent_heights?: Record<string, number>
-  // Ids for the two new nodes, so the browser can draw them before this returns.
-  user_node_id?: string
-  assistant_node_id?: string
+  // Id for the new card, so the browser can draw it before this returns.
+  node_id?: string
   // Where the first card of a new thread goes, when one was picked.
   layout?: { x: number; y: number }
 }
 
 export type GenerateResponse = {
-  user_node_id: string
-  assistant_node_id: string
+  node_id: string
   session_title: string
 }
 
@@ -179,7 +177,7 @@ export function generate(sessionId: string, body: GenerateRequest): Promise<Gene
   })
 }
 
-// Renames a box. An empty title falls back to whatever the model wrote.
+// Renames a card. An empty title falls back to whatever the model wrote.
 export function setTitle(sessionId: string, nodeId: string, title: string): Promise<void> {
   return request(
     `/sessions/${encodeURIComponent(sessionId)}/nodes/${encodeURIComponent(nodeId)}/title`,

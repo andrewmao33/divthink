@@ -12,7 +12,7 @@ export type StreamEvent =
       type: 'done'
       data: {
         node_id: string
-        content: string
+        response: string
         thought_headings: string[]
         thinking_seconds: number | null
         usage?: {

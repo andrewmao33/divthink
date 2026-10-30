@@ -326,14 +326,10 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
     const { session, sending, nodes, edges, activeId, mergeIds, highlight, model, images, readOnly } =
       get()
     if (!session || sending || readOnly) return false
-    // The new prompt hangs from the reply of the active card, or from the reply
-    // of every card picked to merge.
+    // The new card hangs from the active card, or from every card picked to merge.
     const { byId } = exchangesOf(nodes, edges)
     const from = mergeIds.length > 0 ? mergeIds : activeId ? [activeId] : []
-    const parentIds = from.flatMap((id) => {
-      const exchange = byId.get(id)
-      return exchange ? [exchange.reply?.id ?? exchange.id] : []
-    })
+    const parentIds = from.filter((id) => byId.has(id))
     if (get().demo) {
       // No server and no model: the prompt is echoed in the panel with a fixed
       // answer, and the canvas is left as it was.
@@ -347,35 +343,29 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       }))
       return true
     }
-    // Drawn now, saved after: the prompt and an empty reply appear the moment
-    // Enter is pressed, with the ids the server will save them under.
+    // Drawn now, saved after: the card appears the moment Enter is pressed, with
+    // the id the server will save it under, its response still empty.
     // A new thread opened at a chosen spot starts there, and stays there.
     const at = parentIds.length === 0 && !highlight ? get().newThreadAt : null
-    const userId = crypto.randomUUID()
-    const assistantId = crypto.randomUUID()
-    const now = new Date().toISOString()
-    const draft = (node: Pick<ApiNode, 'id' | 'type' | 'content' | 'model' | 'status' | 'metadata'>): BoxNode => ({
-      id: node.id,
-      type: 'box',
-      position: { x: 0, y: 0 },
-      data: { node: { ...node, position_x: 0, position_y: 0, created_at: now }, optimistic: true },
-    })
+    const cardId = crypto.randomUUID()
+    const node: ApiNode = {
+      id: cardId,
+      prompt,
+      response: '',
+      model,
+      position_x: 0,
+      position_y: 0,
+      status: 'pending',
+      metadata: {
+        ...(highlight && { highlight: { source_node_id: highlight.sourceNodeId, text: highlight.text } }),
+        ...(at && { layout: at }),
+      },
+      created_at: new Date().toISOString(),
+    }
+    const box: BoxNode = { id: cardId, type: 'box', position: { x: 0, y: 0 }, data: { node, optimistic: true } }
     const drafts = {
-      nodes: [
-        draft({
-          id: userId,
-          type: 'user',
-          content: prompt,
-          model: null,
-          status: 'complete',
-          metadata: {
-            ...(highlight && { highlight: { source_node_id: highlight.sourceNodeId, text: highlight.text } }),
-            ...(at && { layout: at }),
-          },
-        }),
-        draft({ id: assistantId, type: 'assistant', content: '', model, status: 'pending', metadata: {} }),
-      ],
-      edges: [...parentIds.map((p) => localEdge(p, userId)), localEdge(userId, assistantId)],
+      nodes: [box],
+      edges: parentIds.map((p) => localEdge(p, cardId)),
     }
     const before = {
       activeId,
@@ -387,7 +377,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
     }
     const showDrafts = () =>
       set((s) => ({
-        nodes: [...s.nodes.filter((box) => box.id !== userId && box.id !== assistantId), ...drafts.nodes],
+        nodes: [...s.nodes.filter((box) => box.id !== cardId), ...drafts.nodes],
         edges: [...s.edges.filter((edge) => !drafts.edges.some((d) => d.id === edge.id)), ...drafts.edges],
       }))
     showDrafts()
@@ -396,11 +386,11 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       notice: null,
       pendingDelete: null,
       // The new card becomes the active one, so sending again continues it.
-      activeId: userId,
+      activeId: cardId,
       previousActiveId: null,
       newThreadAt: null,
       mergeIds: [],
-      focus: { id: userId },
+      focus: { id: cardId },
       highlight: null,
       images: [],
     })
@@ -412,14 +402,13 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
         await sync(sessionId)
         set({ unsaved: false })
         // Loading the new, empty canvas cleared the drafts; put them back.
-        if (!get().nodes.some((box) => box.id === userId)) showDrafts()
-        set({ activeId: userId, focus: { id: userId } })
+        if (!get().nodes.some((box) => box.id === cardId)) showDrafts()
+        set({ activeId: cardId, focus: { id: cardId } })
       }
       const created = await generate(sessionId, {
         prompt,
         parent_ids: parentIds,
-        user_node_id: userId,
-        assistant_node_id: assistantId,
+        node_id: cardId,
         ...(at && { layout: at }),
         ...(model && { model }),
         ...(highlight && {
@@ -435,10 +424,9 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
         // Always offered; the model only searches when the question needs it.
         web_search: true,
       })
-      // The stream normally delivers the saved nodes (node_created). If they haven't
-      // arrived yet, fetch them so the drafts are replaced regardless.
-      const stillDraft = (id: string) => get().nodes.some((box) => box.id === id && box.data.optimistic)
-      if (stillDraft(created.user_node_id) || stillDraft(created.assistant_node_id)) {
+      // The stream normally delivers the saved card (node_created). If it hasn't
+      // arrived yet, fetch it so the draft is replaced regardless.
+      if (get().nodes.some((box) => box.id === created.node_id && box.data.optimistic)) {
         const graph = await getSession(sessionId)
         set((s) => addMissing(s, graph))
       }
@@ -448,9 +436,9 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       }))
       return true
     } catch (e) {
-      // Not saved: the drafts go, and everything is as it was before sending.
+      // Not saved: the draft goes, and everything is as it was before sending.
       set((s) => ({
-        ...removeNodes(s, [userId, assistantId]),
+        ...removeNodes(s, [cardId]),
         ...before,
         focus: before.activeId ? { id: before.activeId } : null,
         sending: false,
@@ -465,8 +453,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
     const { nodes, edges, pendingDelete, readOnly } = get()
     const exchange = exchangesOf(nodes, edges).byId.get(id)
     if (!exchange || exchange.children.length > 0 || pendingDelete || readOnly) return
-    const nodeIds = [exchange.id, exchange.reply?.id].filter((n): n is string => Boolean(n))
-    set({ pendingDelete: { nodeIds: [...new Set(nodeIds)], label: labelOf(exchange) }, notice: null })
+    set({ pendingDelete: { nodeIds: [exchange.id], label: labelOf(exchange) }, notice: null })
   },
 
   confirmDelete: async () => {
@@ -653,9 +640,9 @@ function withoutNodes(s: CanvasState, nodeIds: string[]) {
   }
 }
 
-// The card a server node belongs to: a reply's id gives its prompt's card.
+// The card with this id, if it is still on the canvas.
 function ownerOf(s: CanvasState, nodeId: string): string | undefined {
-  return exchangesOf(s.nodes, s.edges).ownerOf.get(nodeId)
+  return exchangesOf(s.nodes, s.edges).byId.has(nodeId) ? nodeId : undefined
 }
 
 // Opening a canvas lands on the card most recently added, centred.

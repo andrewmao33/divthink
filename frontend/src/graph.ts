@@ -130,7 +130,7 @@ export function applyEvent(current: Graph, event: StreamEvent, now = Date.now())
       return updateReply(current, node_id, ({ node, live }) => {
         const thinkingEnded = live?.thinkingStartedAt != null && live.thinkingSeconds == null
         return {
-          node: { ...node, status: 'streaming', content: node.content + text },
+          node: { ...node, status: 'streaming', response: node.response + text },
           live: {
             ...emptyLive(),
             ...live,
@@ -143,12 +143,12 @@ export function applyEvent(current: Graph, event: StreamEvent, now = Date.now())
     }
 
     case 'done': {
-      const { node_id, content, thought_headings, thinking_seconds, usage } = event.data
+      const { node_id, response, thought_headings, thinking_seconds, usage } = event.data
       return update(current, node_id, false, ({ node }) => ({
         node: {
           ...node,
           status: 'complete',
-          content,
+          response,
           metadata: { ...node.metadata, thought_headings, thinking_seconds, usage },
         },
       }))
@@ -165,7 +165,7 @@ export function applyEvent(current: Graph, event: StreamEvent, now = Date.now())
     case 'error': {
       const { node_id, message } = event.data
       return update(current, node_id, false, ({ node }) => ({
-        node: { ...node, status: 'error', content: '', metadata: { ...node.metadata, error: message } },
+        node: { ...node, status: 'error', response: '', metadata: { ...node.metadata, error: message } },
       }))
     }
   }

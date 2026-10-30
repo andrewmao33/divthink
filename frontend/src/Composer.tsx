@@ -446,7 +446,7 @@ function RepoIcon() {
 // A prompt can only continue from a reply that finished: one still being
 // written, or one that failed, has no complete text to build on.
 function whyBlocked(active: Exchange | undefined): string | null {
-  const status = active?.reply?.status
+  const status = active?.node.status
   if (status === 'pending' || status === 'streaming') return 'Wait for this reply to finish.'
   if (status === 'error') return 'This reply failed. Pick another card to continue from.'
   return null
@@ -455,7 +455,7 @@ function whyBlocked(active: Exchange | undefined): string | null {
 // A merge needs at least two cards, each with a finished reply to bring.
 function whyMergeBlocked(sources: Exchange[]): string | null {
   if (sources.length < 2) return 'Click another card on the canvas to merge it with this one.'
-  const statuses = sources.map((source) => source.reply?.status)
+  const statuses = sources.map((source) => source.node.status)
   if (statuses.some((s) => s === 'pending' || s === 'streaming')) {
     return 'Wait for every picked reply to finish.'
   }

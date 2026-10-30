@@ -99,7 +99,7 @@ Sort by latency multiplied by volume.`,
 
 export const DEMO_TITLE = 'Where to add caching'
 // The card the demo opens on: the merge, so the lit path shows both branches.
-export const DEMO_ACTIVE = 'demo-plan-prompt'
+export const DEMO_ACTIVE = 'demo-plan'
 
 const GAP_MS = 4 * 60_000
 
@@ -110,28 +110,23 @@ export function demoGraph(): { nodes: ApiNode[]; edges: ApiEdge[] } {
   // older than anything a visitor adds, and "30 min ago" reads better than a date.
   const start = Date.now() - (CARDS.length + 1) * GAP_MS
   CARDS.forEach((card, index) => {
-    const [promptId, replyId] = [`demo-${card.key}-prompt`, `demo-${card.key}-reply`]
-    // A few minutes apart, in order: cards are sorted by when they were made.
-    const createdAt = new Date(start + index * GAP_MS).toISOString()
-    const node = { model: null, position_x: 0, position_y: 0, status: 'complete' as const, created_at: createdAt }
     nodes.push({
-      ...node,
-      id: promptId,
-      type: 'user',
-      content: card.prompt,
+      id: `demo-${card.key}`,
+      prompt: card.prompt,
+      response: card.reply,
+      model: null,
+      position_x: 0,
+      position_y: 0,
+      status: 'complete',
       metadata: card.quote
-        ? { highlight: { source_node_id: `demo-${card.from[0]}-reply`, text: card.quote } }
+        ? { highlight: { source_node_id: `demo-${card.from[0]}`, text: card.quote } }
         : {},
+      // A few minutes apart, in order: cards are sorted by when they were made.
+      created_at: new Date(start + index * GAP_MS).toISOString(),
     })
-    nodes.push({ ...node, id: replyId, type: 'assistant', content: card.reply, metadata: {} })
     for (const parent of card.from) {
-      edges.push({
-        id: `demo-${parent}>${card.key}`,
-        parent_id: `demo-${parent}-reply`,
-        child_id: promptId,
-      })
+      edges.push({ id: `demo-${parent}>${card.key}`, parent_id: `demo-${parent}`, child_id: `demo-${card.key}` })
     }
-    edges.push({ id: `demo-${card.key}`, parent_id: promptId, child_id: replyId })
   })
   return { nodes, edges }
 }

@@ -90,7 +90,7 @@ function Panel({ width, onResize, collapsed, onCollapse }: Props) {
 
   // While a reply streams in, keep its newest text in view, unless the reader
   // has scrolled up to look at something earlier.
-  const streamed = active?.reply?.content.length ?? 0
+  const streamed = active?.node.response.length ?? 0
   useEffect(() => {
     const scroller = scrollRef.current
     if (scroller && wasNearBottom.current) scroller.scrollTop = scroller.scrollHeight
@@ -200,7 +200,7 @@ function Panel({ width, onResize, collapsed, onCollapse }: Props) {
               <div key={source.id} className={styles.source}>
                 <div className={styles.sourceText}>
                   <p className={styles.sourceTitle}>{labelOf(source)}</p>
-                  <p className={styles.sourceExcerpt}>{source.reply?.content || 'No reply yet.'}</p>
+                  <p className={styles.sourceExcerpt}>{source.node.response || 'No reply yet.'}</p>
                 </div>
                 <button
                   type="button"
@@ -301,25 +301,21 @@ function Panel({ width, onResize, collapsed, onCollapse }: Props) {
   )
 }
 
-// One prompt and its reply. The reply is the same node the card draws, so text
+// One prompt and its reply. It is the same node the card draws, so text
 // streams into both at once.
 function Turn({ exchange }: { exchange: Exchange }) {
-  const { prompt, reply, live, quote } = exchange
+  const { node, live, quote } = exchange
   return (
     <>
-      {prompt && (
-        <div className={styles.prompt}>
-          {quote && <blockquote className={styles.quote}>{quote}</blockquote>}
-          <PromptFiles node={prompt} />
-          <p className={styles.promptText}>{prompt.content}</p>
-        </div>
-      )}
-      {reply && (
-        // data-reply-id marks finished replies the Branch menu can act on.
-        <div className={styles.reply} data-reply-id={reply.status === 'complete' ? reply.id : undefined}>
-          <ReplyBody node={reply} live={live} />
-        </div>
-      )}
+      <div className={styles.prompt}>
+        {quote && <blockquote className={styles.quote}>{quote}</blockquote>}
+        <PromptFiles node={node} />
+        <p className={styles.promptText}>{node.prompt}</p>
+      </div>
+      {/* data-reply-id marks finished replies the Branch menu can act on. */}
+      <div className={styles.reply} data-reply-id={node.status === 'complete' ? node.id : undefined}>
+        <ReplyBody node={node} live={live} />
+      </div>
     </>
   )
 }

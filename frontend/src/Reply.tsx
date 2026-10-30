@@ -8,7 +8,7 @@ import styles from './Reply.module.css'
 import { useCanvasStore } from './store'
 import { useGetStarted } from './useGetStarted'
 
-// A model's reply in whatever state it is in: waiting, thinking, streaming,
+// A card's response in whatever state it is in: waiting, thinking, streaming,
 // finished or failed. Drawn the same on a card and in the panel, from the same
 // node, so the two can never disagree.
 export function ReplyBody({ node, live }: { node: ApiNode; live?: LiveReply }) {
@@ -21,7 +21,7 @@ export function ReplyBody({ node, live }: { node: ApiNode; live?: LiveReply }) {
       </>
     )
   }
-  if (!node.content) {
+  if (!node.response) {
     if (live?.thinkingStartedAt != null) {
       return <Thinking startedAt={live.thinkingStartedAt} heading={live.headings.at(-1)} />
     }
@@ -30,7 +30,7 @@ export function ReplyBody({ node, live }: { node: ApiNode; live?: LiveReply }) {
   return (
     <>
       <Thought node={node} live={live} />
-      <Markdown text={node.content} />
+      <Markdown text={node.response} />
       <Tokens node={node} />
     </>
   )

@@ -24,11 +24,11 @@ export type CardNode = Node<CardData, 'card'>
 // and resized from its edges. Everything else happens in the panel.
 function Card({ id, data }: NodeProps<CardNode>) {
   const { exchange, state, picked, sized, thread } = data
-  const { prompt, reply, live, quote } = exchange
+  const { node, live, quote } = exchange
   const placeCard = useCanvasStore((s) => s.placeCard)
-  const files = attachmentsOf(prompt)
+  const files = attachmentsOf(node)
   const sessionId = useCanvasStore((s) => s.session?.id)
-  const finished = reply?.status === 'complete'
+  const finished = node.status === 'complete'
   const className = [styles.card, styles[state], picked && styles.picked, sized && styles.sized]
     .filter(Boolean)
     .join(' ')
@@ -52,27 +52,23 @@ function Card({ id, data }: NodeProps<CardNode>) {
         <div className={styles.prompt}>
           {quote && <p className={styles.quote}>on “{quote}”</p>}
           {exchange.children.length === 0 && <span className={styles.leaf}>leaf</span>}
-          {prompt && (
-            <p className={styles.promptText}>
-              <span className={styles.you}>You: </span>
-              {prompt.content}
-            </p>
-          )}
+          <p className={styles.promptText}>
+            <span className={styles.you}>You: </span>
+            {node.prompt}
+          </p>
           {files.length > 0 && sessionId && <AttachmentThumbs sessionId={sessionId} files={files} />}
         </div>
-        {reply && (
-          // Selectable, so a passage can be highlighted and branched from. nodrag
-          // and nopan: dragging across the text selects it instead of moving the
-          // card or the canvas. nowheel is React Flow's opt-out from panning on
-          // scroll; only the active card gets it, so a swipe anywhere else still
-          // moves the canvas.
-          <div
-            className={`${styles.reply} nodrag nopan ${state === 'active' ? 'nowheel' : ''}`}
-            data-reply-id={finished ? reply.id : undefined}
-          >
-            <ReplyBody node={reply} live={live} />
-          </div>
-        )}
+        {/* Selectable, so a passage can be highlighted and branched from. nodrag
+            and nopan: dragging across the text selects it instead of moving the
+            card or the canvas. nowheel is React Flow's opt-out from panning on
+            scroll; only the active card gets it, so a swipe anywhere else still
+            moves the canvas. */}
+        <div
+          className={`${styles.reply} nodrag nopan ${state === 'active' ? 'nowheel' : ''}`}
+          data-reply-id={finished ? node.id : undefined}
+        >
+          <ReplyBody node={node} live={live} />
+        </div>
         <Handle type="source" position={Position.Bottom} isConnectable={false} className={styles.handle} />
       </div>
     </>
