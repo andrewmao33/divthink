@@ -130,7 +130,7 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
             detail=f"Add your {PROVIDER_LABELS[provider]} API key to use {LABELS[body.model]} (menu → API keys).",
         )
 
-    files = _decoded(body.attachments)
+    files = _decoded(body.attachments) # convert from base64 to bytes
     # Counted once, here, so later sends can tell what a PDF costs without reading it.
     pages = await asyncio.to_thread(
         lambda: [_pages(data) if kind == "application/pdf" else None for kind, data, _ in files]
