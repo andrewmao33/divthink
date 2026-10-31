@@ -119,13 +119,25 @@
   color: var(--color-text-muted);
 }
 
+/* Which model wrote the reply. Above the scrolling part so it stays in view, and
+   outside the selectable part so it can't end up in a highlighted passage. */
+.model {
+  flex: none;
+  margin: 0;
+  padding: var(--space-2) var(--space-4) 0;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+  cursor: grab;
+}
+
 /* The reply in full; a long one scrolls inside the card, so no card grows into
    a tall column. */
 .reply {
   flex: 1;
   min-height: 0;
   max-height: 250px;
-  padding: var(--space-3) var(--space-4) var(--space-4);
+  padding: var(--space-2) var(--space-4) var(--space-4);
   overflow-y: auto;
   overscroll-behavior: contain;
   cursor: text;

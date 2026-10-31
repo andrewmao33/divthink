@@ -28,6 +28,8 @@ function Card({ id, data }: NodeProps<CardNode>) {
   const placeCard = useCanvasStore((s) => s.placeCard)
   const files = attachmentsOf(node)
   const sessionId = useCanvasStore((s) => s.session?.id)
+  // The id stands in for a model no longer on the list.
+  const modelName = useCanvasStore((s) => s.models.find((m) => m.id === node.model)?.label) ?? node.model
   const finished = node.status === 'complete'
   const className = [styles.card, styles[state], picked && styles.picked, sized && styles.sized]
     .filter(Boolean)
@@ -58,6 +60,7 @@ function Card({ id, data }: NodeProps<CardNode>) {
           </p>
           {files.length > 0 && sessionId && <AttachmentThumbs sessionId={sessionId} files={files} />}
         </div>
+        {modelName && <p className={styles.model}>{modelName}</p>}
         {/* Selectable, so a passage can be highlighted and branched from. nodrag
             and nopan: dragging across the text selects it instead of moving the
             card or the canvas. nowheel is React Flow's opt-out from panning on
