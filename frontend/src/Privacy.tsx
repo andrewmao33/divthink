@@ -8,7 +8,7 @@ function Privacy() {
     <SiteShell current="privacy">
       <article className={styles.article}>
         <h1 className={styles.title}>Privacy Policy</h1>
-        <p className={styles.updated}>Last updated · October 25, 2026</p>
+        <p className={styles.updated}>Last updated · October 31, 2026</p>
 
         <div className={styles.body}>
           <p>
@@ -78,7 +78,7 @@ function Privacy() {
           <p>Your data goes to these companies, and nobody else.</p>
           <ul>
             <li>
-              <strong>The AI provider you choose: Anthropic or Google.</strong> To generate a
+              <strong>The AI provider you choose: Anthropic, Google or OpenAI.</strong> To generate a
               reply, Divthink sends your prompt, the earlier messages in that thread, and any
               files attached to them, using your own API key. Replies can search the web, and
               that search is carried out by the same provider. What the provider does with a

@@ -14,7 +14,7 @@ from ..providers.catalog import PROVIDER_LABELS
 
 router = APIRouter(prefix="/keys", tags=["keys"])
 
-Provider = Literal["anthropic", "google"]
+Provider = Literal["anthropic", "google", "openai"]
 
 
 class KeyStatus(BaseModel):
@@ -67,6 +67,11 @@ async def _check_key(provider: str, key: str) -> Literal["ok", "invalid", "unava
         request = urllib.request.Request(
             "https://api.anthropic.com/v1/models?limit=1",
             headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+        )
+    elif provider == "openai":
+        request = urllib.request.Request(
+            "https://api.openai.com/v1/models",
+            headers={"Authorization": f"Bearer {key}"},
         )
     else:
         request = urllib.request.Request(

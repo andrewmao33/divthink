@@ -19,7 +19,7 @@ usual, but every prompt and its reply is also a card you can go back to. Reply f
 card to branch, start separate threads side by side, and merge any cards so the model answers
 with all of their context.
 
-It is free to use with your own Anthropic or Google API key.
+It is free to use with your own Anthropic, Google or OpenAI API key.
 
 ## Features
 
@@ -29,7 +29,7 @@ It is free to use with your own Anthropic or Google API key.
 | **Threads** | Several independent conversations sit side by side on one canvas. |
 | **Merge** | Pick two or more cards, from one thread or several, and ask one question across them. The model gets their shared history once, then each branch on its own. |
 | **Leaves** | A list of every card you can keep going from, newest first. |
-| **A model per reply** | Claude Sonnet, Claude Opus or Gemini Flash, chosen each time you send. Prompts can carry images and PDFs, and replies can search the web. |
+| **A model per reply** | Claude Sonnet, Claude Opus, GPT-6 or Gemini Flash, chosen each time you send. Prompts can carry images and PDFs, and replies can search the web. |
 | **Repos** | Connect a public GitHub repo to a canvas, and replies on it read and search the code before answering. |
 | **Your layout** | Cards are placed automatically, and can be dragged and resized. Tidy puts them back. |
 
@@ -41,7 +41,7 @@ It is free to use with your own Anthropic or Google API key.
 | Backend | Python 3.13, FastAPI, asyncpg |
 | Database | Postgres (Supabase in production, Docker locally) |
 | Sign-in | Supabase Auth: Google, or a code sent by email |
-| Models | Anthropic and Google, called with each user's own key |
+| Models | Anthropic, Google and OpenAI, called with each user's own key |
 | Hosting | Vercel (frontend), Railway (backend) |
 
 ## Run locally
@@ -138,7 +138,7 @@ backend/
     context.py       builds the conversation sent to the model
     generation.py    background reply jobs
     events.py        the in-memory event bus behind the live stream
-    providers/       Claude and Gemini adapters, and the list of models
+    providers/       Claude, Gemini and OpenAI adapters, and the list of models
   db/                schema.sql, seed.sql, migrations/
 frontend/
   src/

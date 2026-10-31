@@ -21,7 +21,7 @@ export const PLAN_CARDS: PlanCard[] = [
     lead: 'Get started with:',
     headline: '5 canvases',
     sub: 'with up to 50 cards each',
-    points: ['Branch, merge and keep threads side by side', 'Claude and Gemini, picked per reply', 'Web search, images and PDFs'],
+    points: ['Branch, merge and keep threads side by side', 'Claude, Gemini and GPT, picked per reply', 'Web search, images and PDFs'],
     note: 'Model use is billed by your provider, to your own API key.',
   },
   {

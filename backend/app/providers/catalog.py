@@ -15,6 +15,10 @@ MODELS = {
     "claude-opus-4-6": "anthropic",
     "claude-sonnet-4-6": "anthropic",
     "gemini-3.6-flash": "google",
+    "gpt-6-astra": "openai",
+    "gpt-6.1-sol": "openai",
+    "gpt-6.1-terra": "openai",
+    "gpt-6-luna": "openai",
 }
 
 LABELS = {
@@ -30,6 +34,10 @@ LABELS = {
     "claude-opus-4-6": "Claude Opus 4.6",
     "claude-sonnet-4-6": "Claude Sonnet 4.6",
     "gemini-3.6-flash": "Gemini 3.6 Flash",
+    "gpt-6-astra": "GPT-6 Astra",
+    "gpt-6.1-sol": "GPT-6.1 Sol",
+    "gpt-6.1-terra": "GPT-6.1 Terra",
+    "gpt-6-luna": "GPT-6 Luna",
 }
 
 # How much conversation each model can take in, in tokens. Deliberately the
@@ -38,6 +46,8 @@ LABELS = {
 CONTEXT_TOKENS = {
     **{model_id: 200_000 for model_id, provider in MODELS.items() if provider == "anthropic"},
     "gemini-3.6-flash": 1_000_000,
+    # OpenAI charges more above 272K input tokens, which PRICES doesn't cover.
+    **{model_id: 272_000 for model_id, provider in MODELS.items() if provider == "openai"},
 }
 
 DEFAULT_MODEL = "claude-sonnet-5-5"
@@ -46,6 +56,7 @@ DEFAULT_MODEL = "claude-sonnet-5-5"
 PROVIDER_LABELS = {
     "anthropic": "Anthropic",
     "google": "Google",
+    "openai": "OpenAI",
 }
 
 # What each model costs, in US dollars per million tokens: input, output, cache
@@ -54,6 +65,7 @@ PROVIDER_LABELS = {
 # Gemini: Google lists an introductory rate until the end of 2026; this is the
 # published rate after it, so costs err high rather than low.
 # Claude cache writes are 1.25x input (the five-minute cache claude.py asks for).
+# OpenAI cache writes are 1.25x input too (its default 30-minute cache).
 # Haiku 5.5 is priced for prompts up to 100K tokens; longer ones cost five times as much.
 PRICES: dict[str, tuple[float, float, float, float]] = {
     "claude-sonnet-5-5": (2.00, 10.00, 0.20, 2.50),
@@ -68,7 +80,11 @@ PRICES: dict[str, tuple[float, float, float, float]] = {
     "claude-opus-4-6": (5.00, 25.00, 0.50, 6.25),
     "claude-sonnet-4-6": (3.00, 15.00, 0.30, 3.75),
     "gemini-3.6-flash": (1.50, 7.50, 0.15, 1.50),
+    "gpt-6-astra": (10.00, 50.00, 1.00, 12.50),
+    "gpt-6.1-sol": (2.00, 10.00, 0.10, 2.50),
+    "gpt-6.1-terra": (1.00, 5.00, 0.05, 1.25),
+    "gpt-6-luna": (0.10, 0.50, 0.01, 0.125),
 }
 
 # Per web search, in US dollars. Gemini's search grounding isn't counted yet.
-SEARCH_PRICE = {"anthropic": 0.01, "google": 0.0}
+SEARCH_PRICE = {"anthropic": 0.01, "google": 0.0, "openai": 0.01}

@@ -9,7 +9,7 @@ function Terms() {
     <SiteShell current="terms">
       <article className={styles.article}>
         <h1 className={styles.title}>Terms of Service</h1>
-        <p className={styles.updated}>Last updated · October 14, 2026</p>
+        <p className={styles.updated}>Last updated · October 31, 2026</p>
 
         <div className={styles.body}>
           <p>
@@ -36,8 +36,8 @@ function Terms() {
               your email and Google account secure.
             </li>
             <li>
-              <strong>Your API keys.</strong> Replies are generated with the Anthropic or Google
-              API key you save. You are responsible for that key, for the provider's terms that
+              <strong>Your API keys.</strong> Replies are generated with the Anthropic, Google or
+              OpenAI API key you save. You are responsible for that key, for the provider's terms that
               come with it, and for what the provider charges you. Setting a spending limit with
               your provider is a good idea.
             </li>
@@ -67,7 +67,7 @@ function Terms() {
 
           <h2>4. What the AI writes</h2>
           <p>
-            Replies are written by AI models from Anthropic and Google, not by Divthink. They can
+            Replies are written by AI models from Anthropic, Google and OpenAI, not by Divthink. They can
             be wrong, incomplete or out of date. Check anything important before you rely on it,
             and do not treat a reply as professional advice, whether medical, legal, financial or
             otherwise.

@@ -14,7 +14,7 @@ CREATE TABLE users (
 CREATE TABLE api_keys (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id       uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  provider      text NOT NULL CHECK (provider IN ('anthropic', 'google')),
+  provider      text NOT NULL CHECK (provider IN ('anthropic', 'google', 'openai')),
   encrypted_key bytea NOT NULL,
   created_at    timestamptz NOT NULL DEFAULT now(),
   UNIQUE (user_id, provider)

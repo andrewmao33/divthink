@@ -41,6 +41,11 @@ const HELP: Record<string, { placeholder: string; where: string; url: string }> 
     where: 'Google AI Studio → Get API key',
     url: 'https://aistudio.google.com/apikey',
   },
+  openai: {
+    placeholder: 'sk-…',
+    where: 'OpenAI Platform → API keys',
+    url: 'https://platform.openai.com/api-keys',
+  },
 }
 
 // The settings window (sidebar → Settings): a list of sections on the left,
@@ -312,7 +317,7 @@ function Privacy() {
       <details className={styles.disclosure} open>
         <summary>How your data is used</summary>
         <ul>
-          <li>Your prompts, the thread above them and any attached files go to Anthropic or Google, whichever model you pick, under your own API key and their terms.</li>
+          <li>Your prompts, the thread above them and any attached files go to Anthropic, Google or OpenAI, whichever model you pick, under your own API key and their terms.</li>
           <li>Your canvases, files and the details of each reply are stored so you can come back to them.</li>
           <li>Page visits are counted anonymously by Cloudflare, without cookies and without linking them to your account.</li>
           <li>Your data is never sold and never used for advertising.</li>
@@ -536,7 +541,7 @@ function Billing() {
         <div>
           <p className={styles.rowTitle}>Spent this month</p>
           <p className={styles.rowHint}>
-            Charged by Anthropic or Google to your own API key. An estimate from their list prices.
+            Charged by Anthropic, Google or OpenAI to your own API key. An estimate from their list prices.
           </p>
         </div>
         <span className={styles.value}>${account.month_cost_usd.toFixed(2)}</span>

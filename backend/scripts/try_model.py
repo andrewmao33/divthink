@@ -1,18 +1,25 @@
-"""Stream a reply from Gemini: thinking headings (dimmed), then the answer.
+"""Stream a reply from a model: thinking headings (dimmed), then the answer.
 
 Run from backend/:
-    .venv/bin/python -m scripts.try_model                      # built-in 3-turn conversation
-    .venv/bin/python -m scripts.try_model "your own prompt"    # single prompt
+    .venv/bin/python -m scripts.try_model                      # built-in 3-turn conversation on Gemini
+    .venv/bin/python -m scripts.try_model "your own prompt"    # single prompt on Gemini
+    .venv/bin/python -m scripts.try_model --model gpt-6-luna "your own prompt"
+    .venv/bin/python -m scripts.try_model --model gpt-6-luna --search "your own prompt"
+    .venv/bin/python -m scripts.try_model --model gpt-6-luna --file notes.pdf "your own prompt"
+    .venv/bin/python -m scripts.try_model --model gpt-6-luna --repo "your own prompt"   # a small made-up repo
 """
 
+import argparse
 import asyncio
-import sys
+import mimetypes
 import time
+from pathlib import Path
 
 from app.config import settings
 from app.prompt import BASE_PROMPT
-from app.providers import gemini
-from app.providers.base import Message
+from app.providers import gemini, openai
+from app.providers.base import Attachment, Message, Toolbox
+from app.repos import TOOLS
 from app.thinking import thought_headings
 
 MODEL = "gemini-3.6-flash"
@@ -26,18 +33,63 @@ CONVERSATION = [
 
 DIM, RESET = "\033[2m", "\033[0m"
 
+# The real repo tools' definitions, answered from these files instead of a canvas.
+REPO_FILES = {
+    "README.md": "# Tiny shop\nStart with `make run`.\n",
+    "shop/prices.py": "TAX_RATE = 0.0825\n\n\ndef with_tax(price):\n    return round(price * (1 + TAX_RATE), 2)\n",
+}
+
+
+async def run_repo_tool(name: str, args: dict) -> str:
+    if name == "list_files":
+        return "\n".join(REPO_FILES)
+    if name == "read_file":
+        return REPO_FILES.get(args.get("path", ""), "There is no such file.")
+    if name == "search_code":
+        query = str(args.get("query", "")).lower()
+        found = [
+            f"{path}:{number}: {line}"
+            for path, text in REPO_FILES.items()
+            for number, line in enumerate(text.splitlines(), 1)
+            if query in line.lower()
+        ]
+        return "\n".join(found) or "No matches."
+    return f"There is no tool called {name}."
+
+
+def describe_repo_tool(name: str, args: dict) -> str:
+    return f"{name} {args}"
+
 
 async def main() -> None:
-    prompt = " ".join(sys.argv[1:])
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", default=MODEL)
+    parser.add_argument("--search", action="store_true", help="let the model search the web")
+    parser.add_argument("--file", type=Path, help="attach an image or a PDF")
+    parser.add_argument("--repo", action="store_true", help="let the model read a small made-up repo")
+    parser.add_argument("prompt", nargs="*")
+    args = parser.parse_args()
+    prompt = " ".join(args.prompt)
     messages = [Message("user", prompt)] if prompt else CONVERSATION
+    if args.file:
+        media_type = mimetypes.guess_type(args.file.name)[0] or "application/octet-stream"
+        attachment = Attachment(media_type, args.file.read_bytes(), args.file.name)
+        messages[-1] = Message("user", messages[-1].content, [attachment])
+    if args.model.startswith("gpt-"):
+        stream, api_key = openai.stream, settings.openai_api_key
+    else:
+        stream, api_key = gemini.stream, settings.google_api_key
 
     start = time.perf_counter()
     first_heading_at = first_text_at = None
     thoughts = ""  # full thinking text; only its headings get shown
     shown = 0  # how many headings have been printed so far
     answer_started = False
+    usage = None
 
-    async for chunk in gemini.stream(MODEL, messages, settings.google_api_key, BASE_PROMPT):
+    toolbox = Toolbox(TOOLS, run_repo_tool, describe_repo_tool) if args.repo else None
+
+    async for chunk in stream(args.model, messages, api_key, BASE_PROMPT, args.search, toolbox):
         now = time.perf_counter() - start
         if chunk.kind == "thought":
             thoughts += chunk.text
@@ -46,6 +98,12 @@ async def main() -> None:
                 first_heading_at = first_heading_at or now
                 print(f"{DIM}{heading}…{RESET}", flush=True)
             shown = len(headings)
+        elif chunk.kind == "usage":
+            usage = chunk.usage
+        elif chunk.kind == "search":
+            print(f"{DIM}Searching: {chunk.text}{RESET}", flush=True)
+        elif chunk.kind == "tool":
+            print(f"{DIM}Tool: {chunk.text}{RESET}", flush=True)
         else:
             if not answer_started:
                 first_text_at = now
@@ -60,6 +118,8 @@ async def main() -> None:
         f"done after {total:.1f}s",
     ]
     print(f"\n\n[{', '.join(timings)}]")
+    if usage is not None:
+        print(f"[{usage}]")
 
 
 if __name__ == "__main__":

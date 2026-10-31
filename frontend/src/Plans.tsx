@@ -96,7 +96,7 @@ function Plans({ userId }: { userId: string }) {
 
         <h1 className={styles.title}>{firstTime ? 'Welcome. Pick a plan' : 'Plans'}</h1>
         <p className={styles.note}>
-          Every plan uses your own Anthropic or Google key for the models. Pro removes the limits on
+          Every plan uses your own Anthropic, Google or OpenAI key for the models. Pro removes the limits on
           canvases and cards.
         </p>
 

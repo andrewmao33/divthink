@@ -8,6 +8,7 @@ Never raises: a canvas without a title is fine, a failed reply is not.
 import logging
 
 import anthropic
+import openai
 from google import genai
 from google.genai import types
 
@@ -62,6 +63,8 @@ async def _ask(
     try:
         if MODELS.get(model) == "anthropic":
             return await _claude(instruction, source, model, api_key)
+        if MODELS.get(model) == "openai":
+            return await _openai(instruction, source, model, api_key)
         return await _gemini(instruction, source, model, api_key)
     except Exception:
         log.warning("could not write a title with %s", model, exc_info=True)
@@ -108,6 +111,31 @@ async def _claude(instruction: str, source: str, model: str, api_key: str) -> tu
             getattr(used, "cache_creation_input_tokens", 0) or 0,
         )
         return "".join(b.text for b in reply.content if getattr(b, "type", None) == "text"), usage
+    finally:
+        await client.close()
+
+
+async def _openai(instruction: str, source: str, model: str, api_key: str) -> tuple[str | None, Usage]:
+    client = openai.AsyncOpenAI(api_key=api_key)
+    try:
+        reply = await client.responses.create(
+            model=model,
+            # Reasoning counts against the limit too, as with Claude above.
+            max_output_tokens=1024,
+            reasoning={"effort": "low"},
+            instructions=instruction,
+            input=source,
+            store=False,
+        )
+        used = reply.usage
+        details = used.input_tokens_details
+        usage = Usage(
+            used.input_tokens - details.cached_tokens - details.cache_write_tokens,
+            used.output_tokens,
+            details.cached_tokens,
+            details.cache_write_tokens,
+        )
+        return reply.output_text, usage
     finally:
         await client.close()
 

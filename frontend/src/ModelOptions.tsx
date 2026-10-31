@@ -1,6 +1,6 @@
 import type { ModelInfo } from './api'
 
-const PROVIDER_NAMES: Record<string, string> = { anthropic: 'Claude', google: 'Gemini' }
+const PROVIDER_NAMES: Record<string, string> = { anthropic: 'Claude', google: 'Gemini', openai: 'OpenAI' }
 
 // The <option>s for a model picker: only models whose provider has a saved key,
 // grouped by provider when there is more than one.

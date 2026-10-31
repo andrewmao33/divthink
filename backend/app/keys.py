@@ -54,4 +54,8 @@ def _fernet() -> Fernet:
 
 def _dev_keys() -> dict[str, str]:
     # Local development without sign-in only (auth_enabled is required in production).
-    return {"anthropic": settings.anthropic_api_key, "google": settings.google_api_key}
+    return {
+        "anthropic": settings.anthropic_api_key,
+        "google": settings.google_api_key,
+        "openai": settings.openai_api_key,
+    }

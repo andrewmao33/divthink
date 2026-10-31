@@ -8,7 +8,7 @@ from . import events, repos
 from .context import assemble_context
 from .db import get_pool
 from .prompt import BASE_PROMPT
-from .providers import claude, gemini
+from .providers import claude, gemini, openai
 from .providers.base import Chunk, Message, ProviderError, Toolbox
 from .providers.catalog import MODELS
 from .thinking import thought_headings
@@ -28,6 +28,7 @@ PROVIDERS: dict[
 ] = {
     "google": gemini.stream,
     "anthropic": claude.stream,
+    "openai": openai.stream,
 }
 
 _slots = asyncio.Semaphore(MAX_CONCURRENT)

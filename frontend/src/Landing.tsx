@@ -31,18 +31,18 @@ const METHOD: [string, string][] = [
   ],
   [
     'Pick the model per reply',
-    'Answer one branch with Claude and the next with Gemini. Attach images or PDFs, and let a reply search the web.',
+    'Answer one branch with Claude and the next with GPT or Gemini. Attach images or PDFs, and let a reply search the web.',
   ],
 ]
 
 const FAQ: [string, string][] = [
   [
     'Which models can I use?',
-    'Every current Claude model, from Haiku to Opus and Fable, and Gemini 3.6 Flash. You choose the model each time you send a prompt, from the ones your API key can use.',
+    'Every current Claude model, from Haiku to Opus and Fable, GPT-6 Astra, GPT-6.1 Sol and Terra, GPT-6 Luna, and Gemini 3.6 Flash. You choose the model each time you send a prompt, from the ones your API key can use.',
   ],
   [
     'Do I need an API key?',
-    'Yes. After signing in you add an Anthropic key, a Google key, or both. A model is available once its provider has a key.',
+    'Yes. After signing in you add an Anthropic, Google or OpenAI key, or more than one. A model is available once its provider has a key.',
   ],
   [
     'Is my API key safe?',
@@ -137,7 +137,7 @@ function Landing() {
       <section id="pricing" className={`${styles.section} ${styles.wide}`}>
         <h2 className={styles.heading}>Pricing</h2>
         <p className={styles.intro}>
-          Start free with your own Anthropic or Google key. Upgrade when you need more room.
+          Start free with your own Anthropic, Google or OpenAI key. Upgrade when you need more room.
         </p>
         <PlanCards
           className={styles.pricingCards}
@@ -150,8 +150,8 @@ function Landing() {
           }
         />
         <p className={styles.finePrint}>
-          Prices in US dollars. On Free and Pro, Anthropic or Google bill you directly for model
-          use, at their own rates. Cancel Pro anytime: it lasts until the end of the month you
+          Prices in US dollars. On Free and Pro, Anthropic, Google or OpenAI bill you directly for
+          model use, at their own rates. Cancel Pro anytime: it lasts until the end of the month you
           paid for.
         </p>
       </section>
