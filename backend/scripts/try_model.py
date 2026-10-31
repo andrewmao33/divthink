@@ -17,8 +17,9 @@ from pathlib import Path
 
 from app.config import settings
 from app.prompt import BASE_PROMPT
-from app.providers import gemini, openai
 from app.providers.base import Attachment, Message, Toolbox
+from app.providers.catalog import MODELS
+from app.providers.registry import PROVIDERS
 from app.repos import TOOLS
 from app.thinking import thought_headings
 
@@ -75,10 +76,13 @@ async def main() -> None:
         media_type = mimetypes.guess_type(args.file.name)[0] or "application/octet-stream"
         attachment = Attachment(media_type, args.file.read_bytes(), args.file.name)
         messages[-1] = Message("user", messages[-1].content, [attachment])
-    if args.model.startswith("gpt-"):
-        stream, api_key = openai.stream, settings.openai_api_key
-    else:
-        stream, api_key = gemini.stream, settings.google_api_key
+    provider = MODELS[args.model]
+    stream = PROVIDERS[provider].stream
+    api_key = {
+        "anthropic": settings.anthropic_api_key,
+        "google": settings.google_api_key,
+        "openai": settings.openai_api_key,
+    }[provider]
 
     start = time.perf_counter()
     first_heading_at = first_text_at = None

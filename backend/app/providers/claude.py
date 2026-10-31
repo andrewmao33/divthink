@@ -1,10 +1,11 @@
 import base64
+import urllib.request
 from collections.abc import AsyncIterator
 from typing import Any
 
 import anthropic
 
-from .base import MAX_TOOL_ROUNDS, Chunk, Message, ProviderError, Toolbox, Usage
+from .base import MAX_TOOL_ROUNDS, BaseProvider, Chunk, Message, ProviderError, Toolbox, Usage
 
 MAX_TOKENS = 16000
 
@@ -39,121 +40,152 @@ def _content(message: Message) -> str | list[dict[str, Any]]:
     return blocks
 
 
-async def stream(
-    model: str,
-    messages: list[Message],
-    api_key: str,
-    system: str,
-    web_search: bool = False,
-    toolbox: Toolbox | None = None,
-) -> AsyncIterator[Chunk]:
-    """Yield the reply piece by piece: thinking summaries first, then the answer.
+class ClaudeProvider(BaseProvider):
+    async def stream(
+        self,
+        model: str,
+        messages: list[Message],
+        api_key: str,
+        system: str,
+        web_search: bool = False,
+        toolbox: Toolbox | None = None,
+    ) -> AsyncIterator[Chunk]:
+        """Yield the reply piece by piece: thinking summaries first, then the answer.
 
-    A client per reply, closed afterwards, so the user's key isn't kept around.
-    The SDK retries 429/5xx and connection errors itself.
+        A client per reply, closed afterwards, so the user's key isn't kept around.
+        The SDK retries 429/5xx and connection errors itself.
 
-    With `web_search`, Claude may pause mid-turn to search. The API signals that
-    with stop_reason "pause_turn"; the turn continues by sending back what it has
-    written so far, so this loops until it stops for a different reason.
+        With `web_search`, Claude may pause mid-turn to search. The API signals that
+        with stop_reason "pause_turn"; the turn continues by sending back what it has
+        written so far, so this loops until it stops for a different reason.
 
-    With a `toolbox` (a connected repo), Claude may stop to call one of its
-    tools (stop_reason "tool_use"): the tool runs here, its result goes back as
-    the next user turn, and the loop carries on the same way.
-    """
-    client = anthropic.AsyncAnthropic(api_key=api_key)
-    total = Usage()
-    turns: list[dict[str, Any]] = [{"role": m.role, "content": _content(m)} for m in messages]
-    request: dict[str, Any] = {
-        "model": model,
-        "max_tokens": MAX_TOKENS,
-        # Its own field, not a message: it stays out of the conversation history
-        # and identical across requests, which is what prefix caching needs.
-        "system": system,
-        # Adaptive: Claude decides whether to think. "summarized" returns readable
-        # thinking; the default on current models streams it with empty text.
-        "thinking": {"type": "adaptive", "display": "summarized"},
-        # Automatic caching: everything up to the last message is cached for five
-        # minutes, so a follow-up (or a branch from the same card) reads the thread
-        # above it at a tenth of the price instead of paying for it again.
-        "cache_control": {"type": "ephemeral"},
-    }
-    tools: list[dict[str, Any]] = [WEB_SEARCH_TOOL] if web_search else []
-    if toolbox:
-        tools += [
-            {"name": t.name, "description": t.description, "input_schema": t.parameters}
-            for t in toolbox.tools
-        ]
-    if tools:
-        request["tools"] = tools
+        With a `toolbox` (a connected repo), Claude may stop to call one of its
+        tools (stop_reason "tool_use"): the tool runs here, its result goes back as
+        the next user turn, and the loop carries on the same way.
+        """
+        client = anthropic.AsyncAnthropic(api_key=api_key)
+        total = Usage()
+        turns: list[dict[str, Any]] = [{"role": m.role, "content": _content(m)} for m in messages]
+        request: dict[str, Any] = {
+            "model": model,
+            "max_tokens": MAX_TOKENS,
+            # Its own field, not a message: it stays out of the conversation history
+            # and identical across requests, which is what prefix caching needs.
+            "system": system,
+            # Adaptive: Claude decides whether to think. "summarized" returns readable
+            # thinking; the default on current models streams it with empty text.
+            "thinking": {"type": "adaptive", "display": "summarized"},
+            # Automatic caching: everything up to the last message is cached for five
+            # minutes, so a follow-up (or a branch from the same card) reads the thread
+            # above it at a tenth of the price instead of paying for it again.
+            "cache_control": {"type": "ephemeral"},
+        }
+        tools: list[dict[str, Any]] = [WEB_SEARCH_TOOL] if web_search else []
+        if toolbox:
+            tools += [
+                {"name": t.name, "description": t.description, "input_schema": t.parameters}
+                for t in toolbox.tools
+            ]
+        if tools:
+            request["tools"] = tools
 
-    rounds = 0
-    wrote = False  # any answer text yet, so text after a tool call starts a new paragraph
-    try:
-        while True:
-            fresh = True
-            async with client.messages.stream(messages=turns, **request) as response:
-                async for event in response:
-                    if event.type == "content_block_start":
-                        block = event.content_block
-                        # The query is only on the tool_use block, so it's reported
-                        # here rather than when the results come back.
-                        if getattr(block, "type", None) == "server_tool_use":
-                            query = (getattr(block, "input", None) or {}).get("query")
-                            yield Chunk("search", str(query) if query else "the web")
-                        continue
-                    if event.type != "content_block_delta":
-                        continue
-                    if event.delta.type == "thinking_delta" and event.delta.thinking:
-                        yield Chunk("thought", event.delta.thinking)
-                    elif event.delta.type == "text_delta" and event.delta.text:
-                        if fresh and wrote:
-                            yield Chunk("text", "\n\n")
-                        fresh, wrote = False, True
-                        yield Chunk("text", event.delta.text)
-                final = await response.get_final_message()
+        rounds = 0
+        wrote = False  # any answer text yet, so text after a tool call starts a new paragraph
+        try:
+            while True:
+                fresh = True
+                async with client.messages.stream(messages=turns, **request) as response:
+                    async for event in response:
+                        if event.type == "content_block_start":
+                            block = event.content_block
+                            # The query is only on the tool_use block, so it's reported
+                            # here rather than when the results come back.
+                            if getattr(block, "type", None) == "server_tool_use":
+                                query = (getattr(block, "input", None) or {}).get("query")
+                                yield Chunk("search", str(query) if query else "the web")
+                            continue
+                        if event.type != "content_block_delta":
+                            continue
+                        if event.delta.type == "thinking_delta" and event.delta.thinking:
+                            yield Chunk("thought", event.delta.thinking)
+                        elif event.delta.type == "text_delta" and event.delta.text:
+                            if fresh and wrote:
+                                yield Chunk("text", "\n\n")
+                            fresh, wrote = False, True
+                            yield Chunk("text", event.delta.text)
+                    final = await response.get_final_message()
 
-            # A paused turn bills each continuation, so these accumulate.
-            used = final.usage
-            total.input_tokens += getattr(used, "input_tokens", 0) or 0
-            total.output_tokens += getattr(used, "output_tokens", 0) or 0
-            total.cache_read_tokens += getattr(used, "cache_read_input_tokens", 0) or 0
-            total.cache_write_tokens += getattr(used, "cache_creation_input_tokens", 0) or 0
-            server_tools = getattr(used, "server_tool_use", None)
-            total.searches += getattr(server_tools, "web_search_requests", 0) or 0
+                # A paused turn bills each continuation, so these accumulate.
+                used = final.usage
+                total.input_tokens += getattr(used, "input_tokens", 0) or 0
+                total.output_tokens += getattr(used, "output_tokens", 0) or 0
+                total.cache_read_tokens += getattr(used, "cache_read_input_tokens", 0) or 0
+                total.cache_write_tokens += getattr(used, "cache_creation_input_tokens", 0) or 0
+                server_tools = getattr(used, "server_tool_use", None)
+                total.searches += getattr(server_tools, "web_search_requests", 0) or 0
 
-            if final.stop_reason == "pause_turn":
-                # Hand back everything written so far and let the turn carry on.
-                turns.append({"role": "assistant", "content": final.content})
-                continue
-            if final.stop_reason != "tool_use" or toolbox is None:
-                break
-            # Thinking blocks included: the API needs them back to carry on.
-            turns.append({"role": "assistant", "content": final.content})
-            results = []
-            for block in final.content:
-                if block.type != "tool_use":
+                if final.stop_reason == "pause_turn":
+                    # Hand back everything written so far and let the turn carry on.
+                    turns.append({"role": "assistant", "content": final.content})
                     continue
-                yield Chunk("tool", toolbox.describe(block.name, block.input))
-                results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": await toolbox.run(block.name, block.input),
-                })
-            turns.append({"role": "user", "content": results})
-            rounds += 1
-            if rounds >= MAX_TOOL_ROUNDS:
-                request["tool_choice"] = {"type": "none"}  # answer with what it has
-    except anthropic.APIStatusError as e:
-        raise ProviderError(_friendly_error(e)) from e
-    except anthropic.APIConnectionError as e:
-        raise ProviderError("Couldn't reach Claude. Check your connection and try again.") from e
-    finally:
-        await client.close()
+                if final.stop_reason != "tool_use" or toolbox is None:
+                    break
+                # Thinking blocks included: the API needs them back to carry on.
+                turns.append({"role": "assistant", "content": final.content})
+                results = []
+                for block in final.content:
+                    if block.type != "tool_use":
+                        continue
+                    yield Chunk("tool", toolbox.describe(block.name, block.input))
+                    results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": await toolbox.run(block.name, block.input),
+                    })
+                turns.append({"role": "user", "content": results})
+                rounds += 1
+                if rounds >= MAX_TOOL_ROUNDS:
+                    request["tool_choice"] = {"type": "none"}  # answer with what it has
+        except anthropic.APIStatusError as e:
+            raise ProviderError(_friendly_error(e)) from e
+        except anthropic.APIConnectionError as e:
+            raise ProviderError("Couldn't reach Claude. Check your connection and try again.") from e
+        finally:
+            await client.close()
 
-    if final.stop_reason == "refusal":
-        raise ProviderError("Claude declined to answer this request.")
+        if final.stop_reason == "refusal":
+            raise ProviderError("Claude declined to answer this request.")
 
-    yield Chunk("usage", usage=total)
+        yield Chunk("usage", usage=total)
+
+    async def complete(self, model: str, system: str, text: str, api_key: str) -> tuple[str | None, Usage]:
+        client = anthropic.AsyncAnthropic(api_key=api_key)
+        try:
+            reply = await client.messages.create(
+                model=model,
+                # Newer models think before answering, even for a short reply, and thinking
+                # counts against max_tokens: room for it, and low effort so it stays short.
+                max_tokens=1024,
+                output_config={"effort": "low"},
+                system=system,
+                messages=[{"role": "user", "content": text}],
+            )
+            used = reply.usage
+            usage = Usage(
+                used.input_tokens or 0,
+                used.output_tokens or 0,
+                getattr(used, "cache_read_input_tokens", 0) or 0,
+                getattr(used, "cache_creation_input_tokens", 0) or 0,
+            )
+            return "".join(b.text for b in reply.content if getattr(b, "type", None) == "text"), usage
+        finally:
+            await client.close()
+
+    def _key_check_request(self, key: str) -> urllib.request.Request:
+        return urllib.request.Request(
+            "https://api.anthropic.com/v1/models?limit=1",
+            headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+        )
 
 
 def _friendly_error(e: anthropic.APIStatusError) -> str:

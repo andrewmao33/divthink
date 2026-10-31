@@ -1,6 +1,3 @@
-import asyncio
-import urllib.error
-import urllib.request
 from typing import Literal
 from uuid import UUID
 
@@ -11,6 +8,7 @@ from ..auth import current_user
 from ..db import get_pool
 from ..keys import encrypt, encryption_configured, saved_providers
 from ..providers.catalog import PROVIDER_LABELS
+from ..providers.registry import PROVIDERS
 
 router = APIRouter(prefix="/keys", tags=["keys"])
 
@@ -40,7 +38,7 @@ async def save_key(provider: Provider, body: SaveKeyRequest, user_id: UUID = Dep
     if not encryption_configured():
         raise HTTPException(status_code=503, detail="Saving API keys isn't set up on this server.")
     key = body.key.strip()
-    result = await _check_key(provider, key)
+    result = await PROVIDERS[provider].check_key(key)
     if result == "invalid":
         raise HTTPException(status_code=400, detail=f"That {PROVIDER_LABELS[provider]} key was rejected. Check it and try again.")
     if result == "unavailable":
@@ -59,33 +57,3 @@ async def save_key(provider: Provider, body: SaveKeyRequest, user_id: UUID = Dep
 async def delete_key(provider: Provider, user_id: UUID = Depends(current_user)):
     await get_pool().execute("DELETE FROM api_keys WHERE user_id = $1 AND provider = $2", user_id, provider)
     return Response(status_code=204)
-
-
-async def _check_key(provider: str, key: str) -> Literal["ok", "invalid", "unavailable"]:
-    """Try the key on a free, read-only endpoint (listing models) before saving it."""
-    if provider == "anthropic":
-        request = urllib.request.Request(
-            "https://api.anthropic.com/v1/models?limit=1",
-            headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
-        )
-    elif provider == "openai":
-        request = urllib.request.Request(
-            "https://api.openai.com/v1/models",
-            headers={"Authorization": f"Bearer {key}"},
-        )
-    else:
-        request = urllib.request.Request(
-            "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1",
-            headers={"x-goog-api-key": key},
-        )
-
-    def call() -> Literal["ok", "invalid", "unavailable"]:
-        try:
-            with urllib.request.urlopen(request, timeout=10) as response:
-                return "ok" if response.status == 200 else "unavailable"
-        except urllib.error.HTTPError as e:
-            return "invalid" if e.code in (400, 401, 403) else "unavailable"
-        except OSError:
-            return "unavailable"
-
-    return await asyncio.to_thread(call)

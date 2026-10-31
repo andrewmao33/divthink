@@ -1,16 +1,16 @@
 import asyncio
 import logging
 import time
-from collections.abc import AsyncIterator, Callable, Iterable
+from collections.abc import Iterable
 from uuid import UUID
 
 from . import events, repos
 from .context import assemble_context
 from .db import get_pool
 from .prompt import BASE_PROMPT
-from .providers import claude, gemini, openai
-from .providers.base import Chunk, Message, ProviderError, Toolbox
+from .providers.base import ProviderError
 from .providers.catalog import MODELS
+from .providers.registry import PROVIDERS
 from .thinking import thought_headings
 from .titles import canvas_title_for, title_for, title_from_prompt
 from .usage import record as record_usage
@@ -20,16 +20,6 @@ log = logging.getLogger(__name__)
 # Replies being written at once, across every user: a cap on the server's memory,
 # not on any one person (routes/generate.py limits each user to a few).
 MAX_CONCURRENT = 30
-
-# Provider name (from providers/catalog.py) -> its stream function
-# (model, messages, api_key, system, web_search, toolbox).
-PROVIDERS: dict[
-    str, Callable[[str, list[Message], str, str, bool, Toolbox | None], AsyncIterator[Chunk]]
-] = {
-    "google": gemini.stream,
-    "anthropic": claude.stream,
-    "openai": openai.stream,
-}
 
 _slots = asyncio.Semaphore(MAX_CONCURRENT)
 # Card id -> its running job. Keeps the task from being garbage-collected,
@@ -90,7 +80,7 @@ async def _generate(
             if repo is not None:
                 system, toolbox = BASE_PROMPT + repo[0], repo[1]
 
-            stream = PROVIDERS[MODELS[model]]
+            stream = PROVIDERS[MODELS[model]].stream
             thoughts = answer = ""
             usage = None
             announced = False  # the one-off "thinking" event, for thoughts or a search

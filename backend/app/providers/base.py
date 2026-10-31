@@ -1,4 +1,8 @@
-from collections.abc import Awaitable, Callable
+import asyncio
+import urllib.error
+import urllib.request
+from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -89,3 +93,43 @@ class Toolbox:
 
 class ProviderError(Exception):
     """A provider call failed. The message is written to be shown to the user."""
+
+
+class BaseProvider(ABC):
+    """Everything that differs from one AI company to the next. One instance per
+    company lives in registry.py; keys are passed per call, never kept."""
+
+    @abstractmethod
+    def stream(
+        self,
+        model: str,
+        messages: list[Message],
+        api_key: str,
+        system: str,
+        web_search: bool = False,
+        toolbox: Toolbox | None = None,
+    ) -> AsyncIterator[Chunk]:
+        """Yield a full reply piece by piece: thinking, tool use, the answer, then usage."""
+
+    @abstractmethod
+    async def complete(self, model: str, system: str, text: str, api_key: str) -> tuple[str | None, Usage]:
+        """One short plain-text answer, all at once, and what it cost. Used for titles."""
+
+    @abstractmethod
+    def _key_check_request(self, key: str) -> urllib.request.Request:
+        """A free, read-only request (listing models) that only works with a good key."""
+
+    async def check_key(self, key: str) -> Literal["ok", "invalid", "unavailable"]:
+        """Try the key before saving it."""
+        request = self._key_check_request(key)
+
+        def call() -> Literal["ok", "invalid", "unavailable"]:
+            try:
+                with urllib.request.urlopen(request, timeout=10) as response:
+                    return "ok" if response.status == 200 else "unavailable"
+            except urllib.error.HTTPError as e:
+                return "invalid" if e.code in (400, 401, 403) else "unavailable"
+            except OSError:
+                return "unavailable"
+
+        return await asyncio.to_thread(call)

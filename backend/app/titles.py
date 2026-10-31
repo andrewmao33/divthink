@@ -7,13 +7,9 @@ Never raises: a canvas without a title is fine, a failed reply is not.
 
 import logging
 
-import anthropic
-import openai
-from google import genai
-from google.genai import types
-
 from .providers.base import Usage
 from .providers.catalog import MODELS
+from .providers.registry import PROVIDERS
 
 log = logging.getLogger(__name__)
 
@@ -61,11 +57,7 @@ async def _ask(
     instruction: str, source: str, model: str, api_key: str
 ) -> tuple[str | None, Usage | None]:
     try:
-        if MODELS.get(model) == "anthropic":
-            return await _claude(instruction, source, model, api_key)
-        if MODELS.get(model) == "openai":
-            return await _openai(instruction, source, model, api_key)
-        return await _gemini(instruction, source, model, api_key)
+        return await PROVIDERS[MODELS[model]].complete(model, instruction, source, api_key)
     except Exception:
         log.warning("could not write a title with %s", model, exc_info=True)
         return None, None
@@ -89,79 +81,3 @@ def _tidy(title: str | None, limit: int) -> str | None:
         # Over the limit anyway: drop whole words rather than cut one in half.
         cleaned = cleaned[: limit + 1].rsplit(" ", 1)[0] if " " in cleaned[:limit] else cleaned[:limit]
     return cleaned or None
-
-
-async def _claude(instruction: str, source: str, model: str, api_key: str) -> tuple[str | None, Usage]:
-    client = anthropic.AsyncAnthropic(api_key=api_key)
-    try:
-        reply = await client.messages.create(
-            model=model,
-            # Newer models think before answering, even for a title, and thinking
-            # counts against max_tokens: room for it, and low effort so it stays short.
-            max_tokens=1024,
-            output_config={"effort": "low"},
-            system=instruction,
-            messages=[{"role": "user", "content": source}],
-        )
-        used = reply.usage
-        usage = Usage(
-            used.input_tokens or 0,
-            used.output_tokens or 0,
-            getattr(used, "cache_read_input_tokens", 0) or 0,
-            getattr(used, "cache_creation_input_tokens", 0) or 0,
-        )
-        return "".join(b.text for b in reply.content if getattr(b, "type", None) == "text"), usage
-    finally:
-        await client.close()
-
-
-async def _openai(instruction: str, source: str, model: str, api_key: str) -> tuple[str | None, Usage]:
-    client = openai.AsyncOpenAI(api_key=api_key)
-    try:
-        reply = await client.responses.create(
-            model=model,
-            # Reasoning counts against the limit too, as with Claude above.
-            max_output_tokens=1024,
-            reasoning={"effort": "low"},
-            instructions=instruction,
-            input=source,
-            store=False,
-        )
-        used = reply.usage
-        details = used.input_tokens_details
-        usage = Usage(
-            used.input_tokens - details.cached_tokens - details.cache_write_tokens,
-            used.output_tokens,
-            details.cached_tokens,
-            details.cache_write_tokens,
-        )
-        return reply.output_text, usage
-    finally:
-        await client.close()
-
-
-async def _gemini(instruction: str, source: str, model: str, api_key: str) -> tuple[str | None, Usage]:
-    client = genai.Client(api_key=api_key)
-    try:
-        reply = await client.aio.models.generate_content(
-            model=model,
-            contents=source,
-            config=types.GenerateContentConfig(
-                system_instruction=instruction,
-                max_output_tokens=32,
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-            ),
-        )
-        meta = reply.usage_metadata
-        cached = getattr(meta, "cached_content_token_count", 0) or 0
-        usage = Usage(
-            (getattr(meta, "prompt_token_count", 0) or 0) - cached,
-            (getattr(meta, "candidates_token_count", 0) or 0)
-            + (getattr(meta, "thoughts_token_count", 0) or 0),
-            cached,
-        )
-        return reply.text, usage
-    finally:
-        aclose = getattr(client.aio, "aclose", None)
-        if aclose is not None:
-            await aclose()
