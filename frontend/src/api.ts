@@ -145,6 +145,8 @@ export type GenerateRequest = {
   node_id?: string
   // Where the first card of a new thread goes, when one was picked.
   layout?: { x: number; y: number }
+  // Asking another model the same thing: the card whose files the server copies.
+  copy_attachments_from?: string
 }
 
 export type GenerateResponse = {

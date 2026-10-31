@@ -255,6 +255,31 @@
   overflow-wrap: anywhere;
 }
 
+/* "Ask another model", under a prompt: shown while the prompt is hovered. */
+.askAgain {
+  align-self: flex-end;
+  margin-top: calc(-1 * var(--space-2));
+  padding: 2px 4px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.prompt:hover + .askAgain,
+.askAgain:hover,
+.askAgain:focus-visible {
+  opacity: 1;
+}
+
+.askAgain:hover {
+  color: var(--color-text);
+}
+
 /* The passage this prompt branched from. */
 .quote {
   margin: 0 0 var(--space-2);

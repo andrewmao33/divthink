@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import Composer from './Composer'
+import ModelOptions from './ModelOptions'
 import {
   exchangesOf,
   labelOf,
@@ -302,11 +303,36 @@ function Turn({ exchange }: { exchange: Exchange }) {
         <PromptFiles node={node} />
         <p className={styles.promptText}>{node.prompt}</p>
       </div>
+      <AskAgain exchange={exchange} />
       {/* data-reply-id marks finished replies the Branch menu can act on. */}
       <div className={styles.reply} data-reply-id={node.status === 'complete' ? node.id : undefined}>
         <ReplyBody node={node} live={live} />
       </div>
     </>
+  )
+}
+
+// Under a prompt: ask the same thing of another model. The answer is a new card
+// beside this one, from the same parents.
+function AskAgain({ exchange }: { exchange: Exchange }) {
+  const { models, sending, demo, askAgain } = useCanvasStore(
+    useShallow((s) => ({ models: s.models, sending: s.sending, demo: s.demo, askAgain: s.askAgain })),
+  )
+  const others = models.filter((m) => m.available && m.id !== exchange.node.model)
+  if (demo || others.length === 0) return null
+  return (
+    <select
+      className={styles.askAgain}
+      value=""
+      disabled={sending}
+      onChange={(e) => void askAgain(exchange.id, e.target.value)}
+      aria-label="Ask another model"
+    >
+      <option value="" disabled>
+        ↻ Ask another model
+      </option>
+      <ModelOptions models={others} />
+    </select>
   )
 }
 

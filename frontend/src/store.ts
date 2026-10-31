@@ -109,6 +109,9 @@ type CanvasState = {
   // Sends a prompt that continues from the active card (none: a new thread),
   // or across the cards picked to merge.
   sendPrompt: (prompt: string) => Promise<boolean>
+  // Asks the same thing again with another model: a new card beside it, from
+  // the same parents (a first prompt starts a thread of its own).
+  askAgain: (cardId: string, model: string) => Promise<boolean>
   // Records where a card was dragged to or how it was resized. null hands it
   // back to the automatic layout.
   placeCard: (id: string, layout: CardLayout | null) => void
@@ -240,9 +243,14 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
     try {
       const { models, default: fallback } = await listModels()
       const usable = (id: string | null) => models.some((m) => m.id === id && m.available)
+      const { nodes, activeId } = get()
+      const active = nodes.find((box) => box.id === activeId)?.data.node.model ?? null
       const saved = readSavedModel()
-      // Last choice if its key is set, else the default, else anything with a key.
-      const model = usable(saved)
+      // The active card's model, else the last choice if its key is set, else
+      // the default, else anything with a key.
+      const model = usable(active)
+        ? active
+        : usable(saved)
         ? saved
         : usable(fallback)
           ? fallback
@@ -316,110 +324,30 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       }))
       return true
     }
-    // Drawn now, saved after: the card appears the moment Enter is pressed, with
-    // the id the server will save it under, its response still empty.
     // A new thread opened at a chosen spot starts there, and stays there.
     const at = parentIds.length === 0 && !highlight ? get().newThreadAt : null
-    const cardId = crypto.randomUUID()
-    const node: ApiNode = {
-      id: cardId,
-      prompt,
-      response: '',
+    return send({ prompt, parentIds, model, highlight, images, at, fromComposer: true })
+  },
+
+  askAgain: async (cardId, model) => {
+    const { session, sending, nodes, edges, demo } = get()
+    if (!session || sending || demo) return false
+    const card = exchangesOf(nodes, edges).byId.get(cardId)
+    if (!card) return false
+    // Same parents (none: a thread of its own), same prompt, same quote and files.
+    const saved = card.node.metadata.highlight as { source_node_id?: string } | undefined
+    const highlight =
+      card.quote && saved?.source_node_id ? { sourceNodeId: saved.source_node_id, text: card.quote } : null
+    return send({
+      prompt: card.node.prompt,
+      parentIds: card.parents,
       model,
-      position_x: 0,
-      position_y: 0,
-      status: 'pending',
-      metadata: {
-        ...(highlight && { highlight: { source_node_id: highlight.sourceNodeId, text: highlight.text } }),
-        ...(at && { layout: at }),
-      },
-      created_at: new Date().toISOString(),
-    }
-    const box: BoxNode = { id: cardId, type: 'box', position: { x: 0, y: 0 }, data: { node, optimistic: true } }
-    const drafts = {
-      nodes: [box],
-      edges: parentIds.map((p) => localEdge(p, cardId)),
-    }
-    const before = {
-      activeId,
-      previousActiveId: get().previousActiveId,
-      newThreadAt: get().newThreadAt,
-      mergeIds,
       highlight,
-      images,
-    }
-    const showDrafts = () =>
-      set((s) => ({
-        nodes: [...s.nodes.filter((box) => box.id !== cardId), ...drafts.nodes],
-        edges: [...s.edges.filter((edge) => !drafts.edges.some((d) => d.id === edge.id)), ...drafts.edges],
-      }))
-    showDrafts()
-    set({
-      sending: true,
-      notice: null,
-      pendingDelete: null,
-      // The new card becomes the active one, so sending again continues it.
-      activeId: cardId,
-      previousActiveId: null,
-      newThreadAt: null,
-      mergeIds: [],
-      focus: { id: cardId },
-      highlight: null,
       images: [],
+      at: null,
+      copyFrom: card.id,
+      fromComposer: false,
     })
-    try {
-      let sessionId = session.id
-      if (get().unsaved) {
-        // The first prompt on a new canvas: only now does the canvas exist.
-        sessionId = (await createSession()).id
-        await sync(sessionId)
-        set({ unsaved: false })
-        // Loading the new, empty canvas cleared the drafts; put them back.
-        if (!get().nodes.some((box) => box.id === cardId)) showDrafts()
-        set({ activeId: cardId, focus: { id: cardId } })
-      }
-      const created = await generate(sessionId, {
-        prompt,
-        parent_ids: parentIds,
-        node_id: cardId,
-        ...(at && { layout: at }),
-        ...(model && { model }),
-        ...(highlight && {
-          highlight: { source_node_id: highlight.sourceNodeId, text: highlight.text },
-        }),
-        ...(images.length > 0 && {
-          attachments: images.map((i) => ({
-            media_type: i.mediaType,
-            data: i.data,
-            filename: i.name,
-          })),
-        }),
-        // Always offered; the model only searches when the question needs it.
-        web_search: true,
-      })
-      // The stream normally delivers the saved card (node_created). If it hasn't
-      // arrived yet, fetch it so the draft is replaced regardless.
-      if (get().nodes.some((box) => box.id === created.node_id && box.data.optimistic)) {
-        const graph = await getSession(sessionId)
-        set((s) => addMissing(s, graph))
-      }
-      set((s) => ({
-        session: s.session && { ...s.session, title: created.session_title },
-        sending: false,
-      }))
-      return true
-    } catch (e) {
-      // Not saved: the draft goes, and everything is as it was before sending.
-      set((s) => ({
-        ...removeNodes(s, [cardId]),
-        ...before,
-        focus: before.activeId ? { id: before.activeId } : null,
-        sending: false,
-        notice: messageFor(e),
-        limitNotice: e instanceof ApiError && e.status === 402 ? messageFor(e) : null,
-      }))
-      return false
-    }
   },
 
   requestDelete: (id) => {
@@ -770,6 +698,141 @@ function openUnsaved() {
 function isMissing(e: unknown): boolean {
   return e instanceof ApiError && (e.status === 404 || e.status === 422)
 }
+
+// A card about to be sent: typed in the composer, or asked again of another model.
+type Draft = {
+  prompt: string
+  parentIds: string[]
+  model: string | null
+  highlight: Highlight | null
+  images: PendingFile[]
+  at: Point | null
+  copyFrom?: string // the card whose files go along (asking another model)
+  fromComposer: boolean
+}
+
+// Draws the card at once, then saves it and starts its reply. On failure the
+// card goes and everything is as it was before sending.
+async function send(draft: Draft): Promise<boolean> {
+  const get = useCanvasStore.getState
+  const set = useCanvasStore.setState
+  const { prompt, parentIds, model, highlight, images, at } = draft
+  const { session, activeId, previousActiveId, newThreadAt, mergeIds } = get()
+  if (!session) return false
+  // Drawn now, saved after: the card appears the moment Enter is pressed, with
+  // the id the server will save it under, its response still empty.
+  const cardId = crypto.randomUUID()
+  const node: ApiNode = {
+    id: cardId,
+    prompt,
+    response: '',
+    model,
+    position_x: 0,
+    position_y: 0,
+    status: 'pending',
+    metadata: {
+      ...(highlight && { highlight: { source_node_id: highlight.sourceNodeId, text: highlight.text } }),
+      ...(at && { layout: at }),
+    },
+    created_at: new Date().toISOString(),
+  }
+  const box: BoxNode = { id: cardId, type: 'box', position: { x: 0, y: 0 }, data: { node, optimistic: true } }
+  const drafts = {
+    nodes: [box],
+    edges: parentIds.map((p) => localEdge(p, cardId)),
+  }
+  const before = {
+    activeId,
+    previousActiveId,
+    newThreadAt,
+    mergeIds,
+    highlight: get().highlight,
+    images: get().images,
+  }
+  const showDrafts = () =>
+    set((s) => ({
+      nodes: [...s.nodes.filter((box) => box.id !== cardId), ...drafts.nodes],
+      edges: [...s.edges.filter((edge) => !drafts.edges.some((d) => d.id === edge.id)), ...drafts.edges],
+    }))
+  showDrafts()
+  set({
+    sending: true,
+    notice: null,
+    pendingDelete: null,
+    // The new card becomes the active one, so sending again continues it.
+    activeId: cardId,
+    previousActiveId: null,
+    newThreadAt: null,
+    focus: { id: cardId },
+    // What was typed has been sent; asking again leaves the composer as it was.
+    ...(draft.fromComposer && { mergeIds: [], highlight: null, images: [] }),
+  })
+  try {
+    let sessionId = session.id
+    if (get().unsaved) {
+      // The first prompt on a new canvas: only now does the canvas exist.
+      sessionId = (await createSession()).id
+      await sync(sessionId)
+      set({ unsaved: false })
+      // Loading the new, empty canvas cleared the drafts; put them back.
+      if (!get().nodes.some((box) => box.id === cardId)) showDrafts()
+      set({ activeId: cardId, focus: { id: cardId } })
+    }
+    const created = await generate(sessionId, {
+      prompt,
+      parent_ids: parentIds,
+      node_id: cardId,
+      ...(at && { layout: at }),
+      ...(model && { model }),
+      ...(highlight && {
+        highlight: { source_node_id: highlight.sourceNodeId, text: highlight.text },
+      }),
+      ...(draft.copyFrom && { copy_attachments_from: draft.copyFrom }),
+      ...(images.length > 0 && {
+        attachments: images.map((i) => ({
+          media_type: i.mediaType,
+          data: i.data,
+          filename: i.name,
+        })),
+      }),
+      // Always offered; the model only searches when the question needs it.
+      web_search: true,
+    })
+    // The stream normally delivers the saved card (node_created). If it hasn't
+    // arrived yet, fetch it so the draft is replaced regardless.
+    if (get().nodes.some((box) => box.id === created.node_id && box.data.optimistic)) {
+      const graph = await getSession(sessionId)
+      set((s) => addMissing(s, graph))
+    }
+    set((s) => ({
+      session: s.session && { ...s.session, title: created.session_title },
+      sending: false,
+    }))
+    return true
+  } catch (e) {
+    // Not saved: the draft goes, and everything is as it was before sending.
+    set((s) => ({
+      ...removeNodes(s, [cardId]),
+      ...before,
+      focus: before.activeId ? { id: before.activeId } : null,
+      sending: false,
+      notice: messageFor(e),
+      limitNotice: e instanceof ApiError && e.status === 402 ? messageFor(e) : null,
+    }))
+    return false
+  }
+}
+
+// The composer's model follows the active card: continuing a thread asks the
+// model that wrote its latest reply. A new thread goes back to the one last
+// picked in the composer.
+useCanvasStore.subscribe((s, prev) => {
+  if (s.activeId === prev.activeId) return
+  const usable = (id: string | null | undefined) => s.models.some((m) => m.id === id && m.available)
+  const active = s.nodes.find((box) => box.id === s.activeId)?.data.node.model
+  const model = s.activeId ? active : readSavedModel()
+  if (model && usable(model) && model !== s.model) useCanvasStore.setState({ model })
+})
 
 // The model picked last time, remembered in this browser only.
 function readSavedModel(): string | null {

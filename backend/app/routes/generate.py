@@ -105,6 +105,9 @@ class GenerateRequest(BaseModel):
     node_id: UUID | None = None
     # Where the card goes, for a new thread started at a chosen spot.
     layout: CardLayout | None = None
+    # Asking another model the same thing: the card whose files go along too.
+    # Copied here, since the browser no longer has their bytes.
+    copy_attachments_from: UUID | None = None
 
     _check_prompt = field_validator("prompt")(_not_blank)
 
@@ -174,6 +177,13 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
                 # A node that is still streaming (or failed) has incomplete text.
                 if found[node_id]["status"] != "complete":
                     raise HTTPException(status_code=409, detail=f"Node is not finished: {node_id}")
+
+            if body.copy_attachments_from:
+                copied = await _saved_files(conn, session_id, body.copy_attachments_from)
+                files += [(kind, data, filename) for kind, data, filename, _ in copied]
+                pages += [page_count for *_, page_count in copied]
+                if len(files) > MAX_ATTACHMENTS:
+                    raise HTTPException(status_code=422, detail="Too many attachments")
 
             # Refused here rather than by the provider, whose error would arrive
             # as a failed reply on a card that then has to be deleted.
@@ -316,6 +326,25 @@ def _file_tokens(media_type: str | None, pages: int | None, size: int) -> int:
     if media_type != "application/pdf":
         return TOKENS_PER_IMAGE
     return (pages or max(1, size // BYTES_PER_PDF_PAGE)) * TOKENS_PER_PDF_PAGE
+
+
+async def _saved_files(conn, session_id: UUID, node_id: UUID) -> list[tuple[str, bytes, str, int | None]]:
+    """A card's files, in the order its prompt had them: (type, bytes, filename, pages)."""
+    metadata = await conn.fetchval(
+        "SELECT metadata FROM nodes WHERE session_id = $1 AND id = $2", session_id, node_id
+    )
+    if metadata is None:
+        raise HTTPException(status_code=404, detail=f"Node not found: {node_id}")
+    saved = metadata.get("attachments", [])
+    rows = await conn.fetch(
+        "SELECT id, media_type, bytes, filename FROM attachments WHERE node_id = $1", node_id
+    )
+    by_id = {str(r["id"]): r for r in rows}
+    return [
+        (r["media_type"], r["bytes"], r["filename"] or "", entry.get("pages"))
+        for entry in saved
+        if (r := by_id.get(entry.get("id")))
+    ]
 
 
 def _decoded(attachments: list[Attachment]) -> list[tuple[str, bytes, str]]:
