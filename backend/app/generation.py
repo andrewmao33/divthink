@@ -1,7 +1,9 @@
 import asyncio
+import json
 import logging
 import time
 from collections.abc import Iterable
+from dataclasses import dataclass
 from uuid import UUID
 
 from . import events, repos
@@ -22,6 +24,8 @@ log = logging.getLogger(__name__)
 MAX_CONCURRENT = 30
 
 _slots = asyncio.Semaphore(MAX_CONCURRENT)
+_slots_in_use = 0  # for the load line; the semaphore's own count is private
+LOAD_LOG_SECONDS = 60
 # Card id -> its running job. Keeps the task from being garbage-collected,
 # and lets a delete stop a reply that is still being written.
 _jobs: dict[UUID, asyncio.Task] = {}
@@ -30,12 +34,19 @@ _jobs: dict[UUID, asyncio.Task] = {}
 def start_generation(
     session_id: UUID,
     node_id: UUID,
+    user_id: UUID,
     model: str,
     api_key: str,
     web_search: bool = False,
+    file_bytes: int = 0,
+    context_chars: int = 0,
 ) -> asyncio.Task:
-    """Fill in the card's response in the background with the user's key. Returns immediately."""
-    task = asyncio.create_task(_generate(session_id, node_id, model, api_key, web_search))
+    """Fill in the card's response in the background with the user's key. Returns immediately.
+
+    `file_bytes` and `context_chars` are the size of the reply's context, only logged."""
+    task = asyncio.create_task(
+        _generate(session_id, node_id, user_id, model, api_key, web_search, file_bytes, context_chars)
+    )
     _jobs[node_id] = task
     task.add_done_callback(lambda _: _jobs.pop(node_id, None))
     return task
@@ -57,21 +68,88 @@ def cancel_generation(node_ids: Iterable[UUID]) -> list[UUID]:
     return stopped
 
 
+@dataclass
+class _Timing:
+    """When a reply reached each stage (time.monotonic), for its log line."""
+
+    queued: float
+    granted: float | None = None  # given a slot
+    first_text: float | None = None
+    ended: float | None = None
+
+
+def _ms(start: float | None, end: float | None) -> int | None:
+    """Empty if the reply never got that far."""
+    return None if start is None or end is None else round((end - start) * 1000)
+
+
 async def _generate(
     session_id: UUID,
     node_id: UUID,
+    user_id: UUID,
     model: str,
     api_key: str,
     web_search: bool = False,
+    file_bytes: int = 0,
+    context_chars: int = 0,
 ) -> None:
-    async with _slots:  # wait for one of the MAX_CONCURRENT slots
-        reply = await _write_reply(session_id, node_id, model, api_key, web_search)
-    # Titles are up to two more small model calls, with the slot already given
-    # back: nobody waiting should wait for them. They come after "done" so the
-    # finished reply doesn't look unfinished while they run, and arrive on their
-    # own events. Never raises.
-    if reply:
-        await _write_title(session_id, node_id, reply, model, api_key)
+    global _slots_in_use
+    timing = _Timing(time.monotonic())
+    outcome = None
+    try:
+        async with _slots:  # wait for one of the MAX_CONCURRENT slots
+            timing.granted = time.monotonic()
+            _slots_in_use += 1
+            try:
+                reply = await _write_reply(session_id, node_id, model, api_key, web_search, timing)
+            finally:
+                _slots_in_use -= 1
+                timing.ended = time.monotonic()
+        outcome = "done" if reply else "error"
+        # Titles are up to two more small model calls, with the slot already given
+        # back: nobody waiting should wait for them. They come after "done" so the
+        # finished reply doesn't look unfinished while they run, and arrive on their
+        # own events. Never raises.
+        if reply:
+            await _write_title(session_id, node_id, reply, model, api_key)
+    except asyncio.CancelledError:
+        outcome = outcome or "cancelled"  # a finished reply stays done, even mid-title
+        raise
+    finally:
+        log.info("reply %s", json.dumps({
+            "node_id": str(node_id),
+            "user_id": str(user_id),
+            "model": model,
+            "queue_wait_ms": _ms(timing.queued, timing.granted),
+            "ttft_ms": _ms(timing.granted, timing.first_text),
+            "duration_ms": _ms(timing.granted, timing.ended),
+            "outcome": outcome,
+            "file_bytes": file_bytes,
+            "context_chars": context_chars,
+        }))
+
+
+def _memory_kb() -> int | None:
+    """The process's memory (VmRSS). /proc only exists on Linux: None anywhere else."""
+    try:
+        with open("/proc/self/status") as status:
+            for line in status:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1])
+    except OSError:
+        pass
+    return None
+
+
+async def log_load() -> None:
+    """Runs for the life of the server: shows whether the slots ever fill."""
+    while True:
+        await asyncio.sleep(LOAD_LOG_SECONDS)
+        log.info("load %s", json.dumps({
+            "slots_in_use": _slots_in_use,
+            "slots": MAX_CONCURRENT,
+            "vmrss_kb": _memory_kb(),
+        }))
 
 
 async def _write_reply(
@@ -80,6 +158,7 @@ async def _write_reply(
     model: str,
     api_key: str,
     web_search: bool,
+    timing: _Timing,
 ) -> str | None:
     """Streams and saves the reply. Returns its text, or None if it failed. A
     cancel isn't caught: it keeps raising, which skips the titles too."""
@@ -127,6 +206,8 @@ async def _write_reply(
                     events.reply_thought(session_id, node, heading)
                 headings_sent = len(headings)
             else:
+                if timing.first_text is None:
+                    timing.first_text = time.monotonic()
                 if thoughts and thinking_seconds is None:
                     thinking_seconds = round(time.monotonic() - started, 1)
                 answer += chunk.text

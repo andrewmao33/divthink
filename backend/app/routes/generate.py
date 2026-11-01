@@ -2,6 +2,7 @@ import asyncio
 import base64
 import binascii
 import io
+import json
 import logging
 import math
 from typing import Literal
@@ -271,7 +272,11 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
     # Only after the transaction has committed, so listeners and the job can see
     # the new card. Announce first so tabs draw it before any tokens arrive.
     await announce_new_nodes(session_id, [node_id])
-    start_generation(session_id, node_id, body.model, api_key, body.web_search)
+    start_generation(
+        session_id, node_id, user_id, body.model, api_key, body.web_search,
+        file_bytes=sum(history["sizes"].values()) + sum(len(data) for _, data, _ in files),
+        context_chars=history["chars"] + len(body.prompt),
+    )
 
     return GenerateResponse(node_id=node_id, session_title=session_title)
 
@@ -288,6 +293,7 @@ async def _check_running(conn: asyncpg.Connection, user_id: UUID) -> None:
         user_id,
     )
     if running >= MAX_OPEN_PER_USER:
+        log.info("refused %s", json.dumps({"user_id": str(user_id), "limit": "open_cap", "count": running}))
         raise HTTPException(
             status_code=429,
             detail=f"You have {running} replies being written.",
@@ -313,6 +319,7 @@ async def _check_rate(conn: asyncpg.Connection, user_id: UUID) -> None:
         user_id,
     )
     if row["recent"] >= MAX_PROMPTS_PER_MINUTE:
+        log.info("refused %s", json.dumps({"user_id": str(user_id), "limit": "rate", "count": row["recent"]}))
         # Room comes back when the oldest of them turns a minute old.
         seconds = max(1, math.ceil(60 - row["oldest_age"]))
         raise HTTPException(

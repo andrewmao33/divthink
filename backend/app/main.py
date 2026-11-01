@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,7 +9,14 @@ from fastapi.responses import JSONResponse
 
 from . import db
 from .config import settings
+from .generation import log_load
 from .routes import account, billing, generate, keys, models, nodes, repos, sessions, stream
+
+# Our own loggers only: INFO for everything would also log every httpx request.
+_handler = logging.StreamHandler(sys.stdout)
+_handler.setFormatter(logging.Formatter("%(levelname)s %(name)s %(message)s"))
+logging.getLogger("app").addHandler(_handler)
+logging.getLogger("app").setLevel(logging.INFO)
 
 log = logging.getLogger(__name__)
 
@@ -18,7 +27,9 @@ INTERRUPTED = "Interrupted because the server restarted. Try again."
 async def lifespan(app: FastAPI):
     await db.open_pool()  # on startup
     await mark_interrupted_replies()
+    load = asyncio.create_task(log_load())
     yield
+    load.cancel()
     await db.close_pool()  # on shutdown
 
 
