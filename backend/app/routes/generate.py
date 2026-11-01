@@ -32,7 +32,8 @@ MAX_ATTACHMENTS = 8
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 MAX_PDF_BYTES = 16 * 1024 * 1024  # PDFs are bigger; Anthropic's request cap is 32 MB
 MAX_ATTACHMENTS_BYTES = 24 * 1024 * 1024  # all of them together
-MAX_RUNNING_PER_USER = 3  # replies one person can have being written at once
+# An abuse limit (a stuck tab, a script), not a load one: generation.py caps load.
+MAX_OPEN_PER_USER = 10  # replies one person can have being written at once
 MAX_PROMPTS_PER_MINUTE = 20  # per user; only a script or a stuck key gets near it
 # Text is counted in characters and turned into tokens at a rate that errs high,
 # and only most of the window is offered, leaving room for the reply itself.
@@ -274,7 +275,7 @@ async def generate(session_id: UUID, body: GenerateRequest, user_id: UUID = Depe
 
 
 async def _check_running(conn: asyncpg.Connection, user_id: UUID) -> None:
-    """Refuse a new reply while this user already has MAX_RUNNING_PER_USER being written."""
+    """Refuse a new reply while this user already has MAX_OPEN_PER_USER being written."""
     running = await conn.fetchval(
         """
         SELECT count(*) FROM nodes n
@@ -284,7 +285,7 @@ async def _check_running(conn: asyncpg.Connection, user_id: UUID) -> None:
         """,
         user_id,
     )
-    if running >= MAX_RUNNING_PER_USER:
+    if running >= MAX_OPEN_PER_USER:
         raise HTTPException(
             status_code=429,
             detail=f"You have {running} replies being written. Wait for one to finish.",

@@ -18,7 +18,7 @@ from .usage import record as record_usage
 log = logging.getLogger(__name__)
 
 # Replies being written at once, across every user: a cap on the server's memory,
-# not on any one person (routes/generate.py limits each user to a few).
+# not on any one person (routes/generate.py has a separate limit per user).
 MAX_CONCURRENT = 30
 
 _slots = asyncio.Semaphore(MAX_CONCURRENT)
