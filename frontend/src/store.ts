@@ -13,6 +13,7 @@ import {
   renameSession,
   saveLayout,
   type ApiNode,
+  type AttachmentType,
   type CardLayout,
   type ModelInfo,
   type Session,
@@ -34,7 +35,7 @@ export type Highlight = { sourceNodeId: string; text: string }
 // a PDF's first page once pdfPreview has drawn it (its name until then).
 export type PendingFile = {
   id: string
-  mediaType: string
+  mediaType: AttachmentType
   data: string
   preview: string | null
   name: string
@@ -446,7 +447,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
     const read = await Promise.all(
       accepted.map(async (file) => ({
         id: crypto.randomUUID(),
-        mediaType: file.type,
+        mediaType: file.type as AttachmentType, // ALLOWED_TYPES, just checked
         data: await toBase64(file),
         preview: file.type === 'application/pdf' ? null : URL.createObjectURL(file),
         name: file.name || 'screenshot',

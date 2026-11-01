@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "gen:types": "cd ../backend && .venv/bin/python -m scripts.dump_openapi > ../frontend/openapi.json && cd ../frontend && npx --yes openapi-typescript@7.13.0 openapi.json -o src/api-types.ts --default-non-nullable=false && rm openapi.json",
     "preview": "vite preview"
   },
   "dependencies": {

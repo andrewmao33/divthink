@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -12,7 +12,7 @@ class Node(BaseModel):
     model: str | None
     position_x: float
     position_y: float
-    status: str
+    status: Literal["pending", "streaming", "complete", "error"]
     metadata: dict[str, Any]
     created_at: datetime
 

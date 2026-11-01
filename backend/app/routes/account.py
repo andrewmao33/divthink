@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 import stripe
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/account", tags=["account"])
 
 
 class Account(BaseModel):
-    plan: str  # free, pro, pro_max
+    plan: Literal["free", "pro", "pro_max"]
     plan_label: str
     canvases: int
     canvas_limit: int | None  # None = unlimited

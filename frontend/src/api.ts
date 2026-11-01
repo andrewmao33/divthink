@@ -1,7 +1,11 @@
 // Talks to the backend. Locally that's the /api dev proxy (vite.config.ts); in
 // production VITE_API_URL points at the API (e.g. https://api.divthink.com).
-// Types mirror the backend's response shapes (backend/app/schemas.py).
+// Types come from the backend's schema: api-types.ts is generated, never edited.
+// After changing a request or response model there, run `npm run gen:types`.
+import type { components } from './api-types'
 import { accessToken } from './auth'
+
+type Schemas = components['schemas']
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) || '/api'
 
@@ -14,50 +18,13 @@ export async function authHeaders(): Promise<Record<string, string>> {
   return token ? { authorization: `Bearer ${token}` } : {}
 }
 
-export type NodeStatus = 'pending' | 'streaming' | 'complete' | 'error'
-
-// One card: a prompt and the model's response to it.
-export type ApiNode = {
-  id: string
-  prompt: string
-  response: string
-  model: string | null
-  position_x: number
-  position_y: number
-  status: NodeStatus
-  metadata: Record<string, unknown>
-  created_at: string
-}
-
-export type ApiEdge = {
-  id: string
-  parent_id: string
-  child_id: string
-}
-
-export type Session = {
-  id: string
-  title: string
-  default_model: string | null
-  created_at: string
-  updated_at: string
-  // A GitHub repo connected to the canvas; only on a loaded canvas.
-  repo?: Repo | null
-}
-
-export type Repo = {
-  owner: string
-  name: string
-  ref: string
-  sha: string
-  file_count: number
-  truncated: boolean
-}
-
-export type SessionGraph = Session & {
-  nodes: ApiNode[]
-  edges: ApiEdge[]
-}
+export type ApiNode = Schemas['Node'] // one card: a prompt and the model's response to it
+export type NodeStatus = ApiNode['status']
+export type ApiEdge = Schemas['Edge']
+export type Repo = Schemas['Repo']
+export type SessionGraph = Schemas['SessionGraph']
+// A canvas without its cards. `repo` only comes with a loaded canvas.
+export type Session = Omit<SessionGraph, 'nodes' | 'edges'>
 
 export class ApiError extends Error {
   status: number
@@ -102,7 +69,7 @@ export function createSession(): Promise<Session> {
 export function renameSession(id: string, title: string): Promise<void> {
   return request(`/sessions/${encodeURIComponent(id)}`, {
     method: 'PATCH',
-    body: JSON.stringify({ title }),
+    body: JSON.stringify({ title } satisfies Schemas['SessionRename']),
   })
 }
 
@@ -116,7 +83,7 @@ export function deleteSession(id: string): Promise<void> {
 export function connectRepo(sessionId: string, url: string): Promise<Repo> {
   return request(`/sessions/${encodeURIComponent(sessionId)}/repo`, {
     method: 'PUT',
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url } satisfies Schemas['ConnectRepo']),
   })
 }
 
@@ -128,31 +95,9 @@ export function getSession(id: string): Promise<SessionGraph> {
   return request(`/sessions/${encodeURIComponent(id)}`)
 }
 
-export type GenerateRequest = {
-  prompt: string
-  parent_ids?: string[]
-  model?: string
-  // Branching from highlighted text in a reply.
-  highlight?: { source_node_id: string; text: string }
-  // Files pasted, dropped or picked, base64 without the data: prefix.
-  attachments?: { media_type: string; data: string; filename: string }[]
-  web_search?: boolean
-  // How tall each parent box is on screen, keyed by node id. A box is as tall as
-  // its text, and only the browser knows that, so without this the server would
-  // have to guess and would drop new boxes on top of long replies.
-  parent_heights?: Record<string, number>
-  // Id for the new card, so the browser can draw it before this returns.
-  node_id?: string
-  // Where the first card of a new thread goes, when one was picked.
-  layout?: { x: number; y: number }
-  // Asking another model the same thing: the card whose files the server copies.
-  copy_attachments_from?: string
-}
-
-export type GenerateResponse = {
-  node_id: string
-  session_title: string
-}
+export type GenerateRequest = Schemas['GenerateRequest']
+export type GenerateResponse = Schemas['GenerateResponse']
+export type AttachmentType = Schemas['Attachment']['media_type']
 
 export function generate(sessionId: string, body: GenerateRequest): Promise<GenerateResponse> {
   return request(`/sessions/${encodeURIComponent(sessionId)}/generate`, {
@@ -165,7 +110,7 @@ export function generate(sessionId: string, body: GenerateRequest): Promise<Gene
 export function setTitle(sessionId: string, nodeId: string, title: string): Promise<void> {
   return request(
     `/sessions/${encodeURIComponent(sessionId)}/nodes/${encodeURIComponent(nodeId)}/title`,
-    { method: 'PATCH', body: JSON.stringify({ title }) },
+    { method: 'PATCH', body: JSON.stringify({ title } satisfies Schemas['TitleRequest']) },
   )
 }
 
@@ -175,16 +120,19 @@ export function deleteNodes(
   sessionId: string,
   nodeIds: string[],
   dryRun: boolean,
-): Promise<{ deleted_node_ids: string[] }> {
+): Promise<Schemas['DeleteNodesResponse']> {
   return request(`/sessions/${encodeURIComponent(sessionId)}/nodes/delete`, {
     method: 'POST',
-    body: JSON.stringify({ node_ids: nodeIds, dry_run: dryRun }),
+    body: JSON.stringify({ node_ids: nodeIds, dry_run: dryRun } satisfies Schemas['DeleteNodesRequest']),
   })
 }
 
 // Where a card was dragged to and how big it was made. Any part may be missing;
 // what is missing is decided by the automatic layout.
-export type CardLayout = { x?: number; y?: number; width?: number; height?: number }
+// (The API also accepts null for "missing"; the browser never sends it.)
+export type CardLayout = {
+  [K in keyof Schemas['CardLayout']]: NonNullable<Schemas['CardLayout'][K]>
+}
 
 // Saves a card's hand-made layout. null puts it back under the automatic one.
 export function saveLayout(
@@ -193,7 +141,7 @@ export function saveLayout(
 ): Promise<void> {
   return request(`/sessions/${encodeURIComponent(sessionId)}/layout`, {
     method: 'PATCH',
-    body: JSON.stringify({ cards }),
+    body: JSON.stringify({ cards } satisfies Schemas['SaveLayoutRequest']),
   })
 }
 
@@ -205,22 +153,13 @@ export function attachmentUrl(sessionId: string, attachmentId: string): string {
   )
 }
 
-export type ModelInfo = {
-  id: string
-  label: string
-  provider: string
-  available: boolean // the user has an API key for its provider
-}
+export type ModelInfo = Schemas['ModelInfo']
 
-export function listModels(): Promise<{ models: ModelInfo[]; default: string }> {
+export function listModels(): Promise<Schemas['ModelsResponse']> {
   return request('/models')
 }
 
-export type KeyStatus = {
-  provider: string
-  label: string
-  configured: boolean
-}
+export type KeyStatus = Schemas['KeyStatus']
 
 // Which providers have a saved key. The keys themselves never come back.
 export function listKeys(): Promise<KeyStatus[]> {
@@ -231,7 +170,7 @@ export function listKeys(): Promise<KeyStatus[]> {
 export function saveKey(provider: string, key: string): Promise<void> {
   return request(`/keys/${encodeURIComponent(provider)}`, {
     method: 'PUT',
-    body: JSON.stringify({ key }),
+    body: JSON.stringify({ key } satisfies Schemas['SaveKeyRequest']),
   })
 }
 
@@ -244,18 +183,7 @@ export function deleteAccount(): Promise<void> {
   return request('/account', { method: 'DELETE' })
 }
 
-export type Account = {
-  plan: 'free' | 'pro' | 'pro_max'
-  plan_label: string
-  canvases: number
-  canvas_limit: number | null // null = unlimited
-  card_limit: number | null // per canvas
-  month_cost_usd: number // this month's replies, whoever's key paid
-  payments_enabled: boolean // Stripe is set up, so Upgrade works
-  has_subscription: boolean // Manage subscription works
-  plan_chosen: boolean // saw the plans after signing up
-  avatar: string | null // data URL of a picture chosen in Settings; null = the default
-}
+export type Account = Schemas['Account']
 
 export function getAccount(): Promise<Account> {
   return request('/account')
@@ -263,7 +191,7 @@ export function getAccount(): Promise<Account> {
 
 // The profile picture, as a data URL already shrunk by the browser (profile.ts).
 export function setAvatar(image: string): Promise<void> {
-  return request('/account/avatar', { method: 'PUT', body: JSON.stringify({ image }) })
+  return request('/account/avatar', { method: 'PUT', body: JSON.stringify({ image } satisfies Schemas['AvatarRequest']) })
 }
 
 export function removeAvatar(): Promise<void> {
@@ -276,12 +204,12 @@ export function choosePlanFree(): Promise<void> {
 }
 
 // Upgrading: Stripe's own checkout page; the browser goes there.
-export function startCheckout(): Promise<{ url: string }> {
+export function startCheckout(): Promise<Schemas['Redirect']> {
   return request('/billing/checkout', { method: 'POST' })
 }
 
 // Managing a subscription: Stripe's own page; the browser goes there.
 
-export function openBillingPortal(): Promise<{ url: string }> {
+export function openBillingPortal(): Promise<Schemas['Redirect']> {
   return request('/billing/portal', { method: 'POST' })
 }
