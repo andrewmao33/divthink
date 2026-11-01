@@ -60,7 +60,7 @@ async def delete_nodes(session_id: UUID, body: DeleteNodesRequest, user_id: UUID
     """Delete nodes plus every descendant left with no parents (design.md, "Graph").
 
     A node that still has another parent survives, e.g. a merge keeps its other
-    branch. Refused if anything it would remove is still pending or streaming.
+    branch. Any reply still being written on a removed node is stopped.
     """
     async with get_pool().acquire() as conn:
         async with conn.transaction():
@@ -81,16 +81,15 @@ async def delete_nodes(session_id: UUID, body: DeleteNodesRequest, user_id: UUID
             ordered = [r["id"] for r in rows if r["id"] in doomed]
 
             if not body.dry_run:
-                # Stop any reply still being written before its row goes, so the
-                # job can't write to a node that no longer exists.
                 running = [n for n in ordered if status[n] in ("pending", "streaming")]
-                if running:
-                    cancel_generation(running)
                 # Edges go with their nodes (ON DELETE CASCADE).
                 await conn.execute("DELETE FROM nodes WHERE id = ANY($1::uuid[])", ordered)
                 await conn.execute("UPDATE sessions SET updated_at = now() WHERE id = $1", session_id)
 
     if not body.dry_run:
+        # Only now that the delete has committed: a stopped reply can't be restarted,
+        # so a failed delete would leave its card stuck as still being written.
+        cancel_generation(running)
         events.publish(session_id, "nodes_deleted", {"node_ids": [str(n) for n in ordered]})
     return DeleteNodesResponse(deleted_node_ids=ordered)
 

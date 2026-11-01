@@ -92,15 +92,14 @@ async def delete_session(session_id: UUID, user_id: UUID = Depends(current_user)
             )
             if not found:
                 raise HTTPException(status_code=404, detail="Session not found")
-            # Stop any reply still being written before its row goes, so the job
-            # can't write to a node that no longer exists.
             running = await conn.fetch(
                 "SELECT id FROM nodes WHERE session_id = $1 AND status IN ('pending', 'streaming')",
                 session_id,
             )
-            if running:
-                cancel_generation([r["id"] for r in running])
             await conn.execute("DELETE FROM sessions WHERE id = $1", session_id)
+    # Only now that the delete has committed: a stopped reply can't be restarted,
+    # so a failed delete would leave its card stuck as still being written.
+    cancel_generation([r["id"] for r in running])
     return Response(status_code=204)
 
 

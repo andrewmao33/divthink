@@ -114,8 +114,6 @@ async def delete_account(user_id: UUID = Depends(current_user)):
             )
     async with get_pool().acquire() as conn:
         async with conn.transaction():
-            # Stop any reply still being written before its row goes, so the job
-            # can't write to a node that no longer exists.
             running = await conn.fetch(
                 """
                 SELECT n.id FROM nodes n JOIN sessions s ON s.id = n.session_id
@@ -123,17 +121,19 @@ async def delete_account(user_id: UUID = Depends(current_user)):
                 """,
                 user_id,
             )
-            if running:
-                cancel_generation([r["id"] for r in running])
             if not settings.auth_enabled:
                 # The built-in dev user has to survive: every request is it.
                 # Empty it instead, which is the same thing to see.
                 await conn.execute("DELETE FROM sessions WHERE user_id = $1", user_id)
                 await conn.execute("DELETE FROM api_keys WHERE user_id = $1", user_id)
-                return Response(status_code=204)
-            await conn.execute("DELETE FROM users WHERE id = $1", user_id)
-            # Supabase keeps logins in the same database. Absent locally.
-            if await supabase_logins(conn):
-                await conn.execute("DELETE FROM auth.users WHERE id = $1", user_id)
-    forget_user(user_id)
+            else:
+                await conn.execute("DELETE FROM users WHERE id = $1", user_id)
+                # Supabase keeps logins in the same database. Absent locally.
+                if await supabase_logins(conn):
+                    await conn.execute("DELETE FROM auth.users WHERE id = $1", user_id)
+    # Only now that the delete has committed: a stopped reply can't be restarted,
+    # so a failed delete would leave its card stuck as still being written.
+    cancel_generation([r["id"] for r in running])
+    if settings.auth_enabled:
+        forget_user(user_id)
     return Response(status_code=204)

@@ -141,7 +141,7 @@ export interface paths {
          * @description Delete nodes plus every descendant left with no parents (design.md, "Graph").
          *
          *     A node that still has another parent survives, e.g. a merge keeps its other
-         *     branch. Refused if anything it would remove is still pending or streaming.
+         *     branch. Any reply still being written on a removed node is stopped.
          */
         post: operations["delete_nodes_sessions__session_id__nodes_delete_post"];
         delete?: never;
