@@ -3,6 +3,7 @@ import base64
 import binascii
 import io
 import logging
+import math
 from typing import Literal
 from uuid import UUID
 
@@ -34,6 +35,7 @@ MAX_PDF_BYTES = 16 * 1024 * 1024  # PDFs are bigger; Anthropic's request cap is 
 MAX_ATTACHMENTS_BYTES = 24 * 1024 * 1024  # all of them together
 # An abuse limit (a stuck tab, a script), not a load one: generation.py caps load.
 MAX_OPEN_PER_USER = 10  # replies one person can have being written at once
+OPEN_CAP_RETRY_SECONDS = 10  # no way to know when a running reply will finish
 MAX_PROMPTS_PER_MINUTE = 20  # per user; only a script or a stuck key gets near it
 # Text is counted in characters and turned into tokens at a rate that errs high,
 # and only most of the window is offered, leaving room for the reply itself.
@@ -288,7 +290,8 @@ async def _check_running(conn: asyncpg.Connection, user_id: UUID) -> None:
     if running >= MAX_OPEN_PER_USER:
         raise HTTPException(
             status_code=429,
-            detail=f"You have {running} replies being written. Wait for one to finish.",
+            detail=f"You have {running} replies being written.",
+            headers={"Retry-After": str(OPEN_CAP_RETRY_SECONDS)},
         )
 
 
@@ -298,19 +301,24 @@ async def _check_rate(conn: asyncpg.Connection, user_id: UUID) -> None:
     Counted from the prompts themselves, so it needs no state of its own. Prompts
     deleted since don't count, which only matters to someone trying to get round it.
     """
-    recent = await conn.fetchval(
+    row = await conn.fetchrow(
         """
-        SELECT count(*) FROM nodes n
+        SELECT count(*) AS recent,
+               extract(epoch FROM now() - min(n.created_at))::float AS oldest_age
+        FROM nodes n
         JOIN sessions s ON s.id = n.session_id
         WHERE s.user_id = $1
           AND n.created_at > now() - interval '1 minute'
         """,
         user_id,
     )
-    if recent >= MAX_PROMPTS_PER_MINUTE:
+    if row["recent"] >= MAX_PROMPTS_PER_MINUTE:
+        # Room comes back when the oldest of them turns a minute old.
+        seconds = max(1, math.ceil(60 - row["oldest_age"]))
         raise HTTPException(
             status_code=429,
-            detail="You're sending prompts too quickly. Wait a moment and try again.",
+            detail="You're sending prompts too quickly.",
+            headers={"Retry-After": str(seconds)},
         )
 
 

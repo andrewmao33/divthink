@@ -3,11 +3,14 @@ from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 from app import generation
 from app.providers.base import Chunk, ProviderError
 from app.providers.catalog import MODELS
-from app.routes.generate import MAX_OPEN_PER_USER, _check_running
+from app.config import settings
+from app.main import app
+from app.routes.generate import MAX_OPEN_PER_USER, MAX_PROMPTS_PER_MINUTE, _check_rate, _check_running
 
 MODEL = next(iter(MODELS))
 MODEL_PROVIDER = MODELS[MODEL]
@@ -16,11 +19,15 @@ MODEL_PROVIDER = MODELS[MODEL]
 class FakeConn:
     """Stands in for a database connection: every count comes back as `count`."""
 
-    def __init__(self, count: int):
+    def __init__(self, count: int, oldest_age: float = 0):
         self.count = count
+        self.oldest_age = oldest_age
 
     async def fetchval(self, *_):
         return self.count
+
+    async def fetchrow(self, *_):
+        return {"recent": self.count, "oldest_age": self.oldest_age}
 
 
 def test_cap_is_ten():
@@ -35,6 +42,28 @@ def test_open_replies_at_the_cap_are_refused():
     with pytest.raises(HTTPException) as refused:
         asyncio.run(_check_running(FakeConn(MAX_OPEN_PER_USER), uuid4()))
     assert refused.value.status_code == 429
+    assert refused.value.headers == {"Retry-After": "10"}
+
+
+def test_prompts_under_the_rate_limit_are_allowed():
+    asyncio.run(_check_rate(FakeConn(MAX_PROMPTS_PER_MINUTE - 1), uuid4()))
+
+
+@pytest.mark.parametrize(
+    ("oldest_age", "seconds"),
+    [(0, "60"), (25.5, "35"), (59.5, "1"), (60, "1"), (61, "1")],
+)
+def test_rate_limit_says_when_room_comes_back(oldest_age, seconds):
+    with pytest.raises(HTTPException) as refused:
+        asyncio.run(_check_rate(FakeConn(MAX_PROMPTS_PER_MINUTE, oldest_age), uuid4()))
+    assert refused.value.status_code == 429
+    assert refused.value.headers == {"Retry-After": seconds}
+
+
+def test_browser_is_allowed_to_read_retry_after():
+    origin = settings.cors_origins.split(",")[0].strip()
+    response = TestClient(app).get("/health", headers={"Origin": origin})
+    assert response.headers["access-control-expose-headers"] == "Retry-After"
 
 
 class FakeProvider:

@@ -52,7 +52,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => null)
     const detail = typeof body?.detail === 'string' ? body.detail : `Request failed (${res.status})`
-    throw new ApiError(res.status, detail)
+    const wait = res.status === 429 ? res.headers.get('retry-after') : null
+    throw new ApiError(
+      res.status,
+      wait ? `${detail} Try again in ${wait} ${wait === '1' ? 'second' : 'seconds'}.` : detail,
+    )
   }
   if (res.status === 204) return undefined as T
   return (await res.json()) as T

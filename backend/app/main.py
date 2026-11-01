@@ -55,6 +55,8 @@ app.add_middleware(
     allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
+    # Cross-origin, the browser hides this from the page unless it's listed.
+    expose_headers=["Retry-After"],
     max_age=600,
 )
 
