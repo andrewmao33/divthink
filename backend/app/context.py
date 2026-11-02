@@ -76,12 +76,7 @@ async def assemble_context(
     for node_id, node in nodes.items():
         nodes[node_id] = dict(node) | {"attachments": files.get(node_id, [])}
 
-    targets = [node_id for node_id in node_ids if node_id in nodes]
-    if len(targets) == 1:
-        # Everything fetched is above the target, so it is the one node nothing
-        # here continues from.
-        return _conversation(nodes, edges, parents_of, set(nodes))
-    return _to_messages(_oldest_first(nodes, edges))
+    return _conversation(nodes, edges, parents_of, set(nodes))
 
 
 def _conversation(
